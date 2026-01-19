@@ -26,6 +26,8 @@ namespace REMS.Client
         [ObservableProperty]
         private bool _isLedOn;
 
+        [ObservableProperty]
+        private int _motorSpeed = 50;
 
         [ObservableProperty]
         private string _logText = "";
@@ -172,7 +174,7 @@ namespace REMS.Client
             }
         }
 
-        // LED ON/OFF
+        // LED ON/OFF UI
         [RelayCommand]
         public void TurnLedOn()
         {
@@ -191,6 +193,33 @@ namespace REMS.Client
                 IsLedOn = false;        
                 SendCommand("LED_OFF"); 
             }
+        }
+
+        // MOTOR UI
+        partial void OnMotorSpeedChanged(int value)
+        {
+            // 슬라이더를 움직이면 "PWM:50" 같은 형식으로 서버에 전송
+            SendCommand($"PWM:{value}");
+        }
+
+        [RelayCommand]
+        public void RunMotor()
+        {
+            SendCommand("MOTOR_RUN");
+        }
+
+        [RelayCommand]
+        public void PauseMotor()
+        {
+            SendCommand("MOTOR_PAUSE"); 
+        }
+
+        [RelayCommand]
+        public void EmergencyStop()
+        {
+            SendCommand("EMERGENCY_STOP");
+            MotorSpeed = 0; // 속도도 0으로 초기화
+            TurnLedOff();
         }
 
         // 로그 추가 헬퍼
