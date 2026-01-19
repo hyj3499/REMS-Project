@@ -5,8 +5,12 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:REMS.Client"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+        Title="REMS Client" Height="600" Width="1000"
+        Background="#1E1E1E">
     <Grid>
-
+        <TextBlock Text="Ready to Start" 
+                   Foreground="Gray" 
+                   HorizontalAlignment="Center" 
+                   VerticalAlignment="Center"/>
     </Grid>
 </Window>
