@@ -123,7 +123,7 @@ namespace REMS.Client
             }
             catch (Exception ex)
             {
-                Application.Current.Dispatcher.Invoke(() => AddLog("⚠️ Disconnected from server."));
+                Application.Current.Dispatcher.Invoke(() => AddLog("[NET] ❌ 서버 연결 실패"));
             }
             finally
             {
