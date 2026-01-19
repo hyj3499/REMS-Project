@@ -5,12 +5,41 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:REMS.Client"
         mc:Ignorable="d"
-        Title="REMS Client" Height="600" Width="1000"
+        Title="REMS - Smart Factory Monitor" Height="600" Width="1000"
         Background="#1E1E1E">
     <Grid>
-        <TextBlock Text="Ready to Start" 
-                   Foreground="Gray" 
-                   HorizontalAlignment="Center" 
-                   VerticalAlignment="Center"/>
+        <TabControl Margin="10" Background="Transparent" BorderThickness="0">
+
+            <TabItem Header="🌡️ 온도 모니터링" FontSize="16" FontWeight="Bold">
+                <Grid Background="#252526">
+                    <TextBlock Text="Text" 
+                               Foreground="White" 
+                               HorizontalAlignment="Center" 
+                               VerticalAlignment="Center" 
+                               FontSize="20"/>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="💡 LED 제어" FontSize="16" FontWeight="Bold">
+                <Grid Background="#252526">
+                    <TextBlock Text="Text"  
+                               Foreground="Cyan" 
+                               HorizontalAlignment="Center" 
+                               VerticalAlignment="Center" 
+                               FontSize="20"/>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="⚙️ 모터 제어" FontSize="16" FontWeight="Bold">
+                <Grid Background="#252526">
+                    <TextBlock Text="Text" 
+                               Foreground="Yellow" 
+                               HorizontalAlignment="Center" 
+                               VerticalAlignment="Center" 
+                               FontSize="20"/>
+                </Grid>
+            </TabItem>
+
+        </TabControl>
     </Grid>
 </Window>
