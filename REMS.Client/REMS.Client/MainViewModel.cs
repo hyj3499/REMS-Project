@@ -28,7 +28,7 @@ namespace REMS.Client
         private string _ledStatusText = "OFF";
 
         [ObservableProperty]
-        private string _logText = "[System] Ready...";
+        private string _logText = "";
 
         // [3] 통신용 변수
         private TcpClient _client;
@@ -68,6 +68,8 @@ namespace REMS.Client
                     Name = "Motor Output"
                 }
             };
+            AddLog("[SYS] REMS 클라이언트 시작됨");
+            AddLog("[SYS] 모니터링 시스템 대기 중...");
         }
 
         // [4] 서버 연결 함수
@@ -77,7 +79,7 @@ namespace REMS.Client
 
             try
             {
-                AddLog($"Connecting to {ip}:{port}...");
+                AddLog($"[NET] 서버({ip}:{port}) 연결 시도...");
 
                 _client = new TcpClient();
                 await _client.ConnectAsync(ip, port); // 비동기 연결 시도
@@ -86,14 +88,14 @@ namespace REMS.Client
                 _writer = new StreamWriter(_client.GetStream()) { AutoFlush = true };
                 _isConnected = true;
 
-                AddLog("✅ Connected to Server!");
+                AddLog("[NET] ✅ 서버 연결 성공!");
 
                 // 연결되자마자 데이터 수신 시작 (별도 스레드)
                 _ = Task.Run(ReceiveDataLoop);
             }
             catch (Exception ex)
             {
-                AddLog($"❌ Connection Error: {ex.Message}");
+                AddLog($"[NET] ❌ 서버 연결 실패: {ex.Message}");
             }
         }
 
@@ -142,7 +144,7 @@ namespace REMS.Client
                     if (key == "TEMP")
                     {
                         // 그래프 업데이트 (오래된 거 지우고 새거 추가)
-                        _tempValues.RemoveAt(0); 
+                        _tempValues.RemoveAt(0);
                         _tempValues.Add(value); //꺼낸 숫자를 _tempValues.Add(value)로 리스트에 넣으면 -> 자동으로 그래프가 그려짐
                     }
                     else if (key == "MOTOR")
@@ -164,7 +166,7 @@ namespace REMS.Client
             if (_isConnected && _writer != null)
             {
                 _writer.WriteLine(command); // 서버로 전송!
-                AddLog($"[Sent] {command}");
+                AddLog($"[TX] 명령 전송: {command}");
             }
         }
 
