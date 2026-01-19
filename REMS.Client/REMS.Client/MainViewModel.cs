@@ -21,6 +21,7 @@ namespace REMS.Client
 
         private readonly ObservableCollection<double> _rpmValues;
         public ISeries[] RpmSeries { get; set; }
+        public Axis[] XAxes { get; set; }
 
         // [2] 상태 데이터
         [ObservableProperty]
@@ -34,6 +35,9 @@ namespace REMS.Client
 
         [ObservableProperty]
         private int _wifiRssi = -100;
+
+        [ObservableProperty]
+        private int _currentRpm = 0;
 
         // [3] 통신용 변수
         private TcpClient _client;
@@ -50,7 +54,7 @@ namespace REMS.Client
             _rpmValues = new ObservableCollection<double>();
 
             // 차트가 비어있으면 에러가 나니까, 0으로 채워진 빈 데이터를 미리 30개 정도 넣어둠
-            for (int i = 0; i < 60; i++)
+            for (int i = 0; i < 30; i++)
             {
                 _rssiValues.Add(-100); // RSSI 기본값은 낮게
                 _rpmValues.Add(0);     // RPM 기본값 0
@@ -77,6 +81,16 @@ namespace REMS.Client
                     Stroke = new SolidColorPaint(SKColors.Orange) { StrokeThickness = 2 },
                     Name = "Actual RPM"
                 }
+            };
+
+            // X축
+            XAxes = new Axis[] {
+                new Axis {
+                 NamePaint = new SolidColorPaint(SKColors.Gray),
+                 LabelsPaint = new SolidColorPaint(SKColors.Gray),
+                 TextSize = 11,
+                 Labeler = v => DateTime.Now.AddSeconds(v - 30).ToString("HH:mm:ss")
+                 }
             };
 
             AddLog("[SYS] REMS 클라이언트 시작됨");
@@ -167,6 +181,7 @@ namespace REMS.Client
                     {
                         if (_rpmValues.Count > 30) _rpmValues.RemoveAt(0);
                         _rpmValues.Add(value);
+                        CurrentRpm = (int)value;
                     }
                 }
             }
@@ -190,7 +205,7 @@ namespace REMS.Client
         [RelayCommand]
         public void TurnLedOn()
         {
-            if (!IsLedOn) 
+            if (!IsLedOn)
             {
                 IsLedOn = true;         // UI에 빨간불 켜기
                 SendCommand("LED_ON");  // 서버 전송
@@ -202,8 +217,8 @@ namespace REMS.Client
         {
             if (IsLedOn)
             {
-                IsLedOn = false;        
-                SendCommand("LED_OFF"); 
+                IsLedOn = false;
+                SendCommand("LED_OFF");
             }
         }
 
@@ -223,7 +238,7 @@ namespace REMS.Client
         [RelayCommand]
         public void PauseMotor()
         {
-            SendCommand("MOTOR_PAUSE"); 
+            SendCommand("MOTOR_PAUSE");
         }
 
         [RelayCommand]

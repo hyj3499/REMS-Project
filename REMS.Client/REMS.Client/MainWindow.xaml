@@ -104,7 +104,7 @@
                             <TextBlock Text="{Binding WifiRssi, StringFormat='{}{0} dBm'}" Foreground="#00CCFF" Margin="15,0" VerticalAlignment="Bottom" FontSize="14" FontWeight="Bold"/>
                         </StackPanel>
 
-                        <lvc:CartesianChart Grid.Row="1" Series="{Binding RssiSeries}" Margin="0,15,0,0"/>
+                        <lvc:CartesianChart Grid.Row="1" Series="{Binding RssiSeries}" XAxes="{Binding XAxes}" Margin="0,15,0,0"/>
                     </Grid>
                 </Border>
 
@@ -117,10 +117,10 @@
 
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="⚙️ Motor Output (RPM)" Foreground="#AAAAAA" FontSize="18" FontWeight="Bold"/>
-                            <TextBlock Text="Live Monitoring" Foreground="Orange" Margin="10,0" VerticalAlignment="Bottom" FontSize="14" FontWeight="Bold"/>
+                            <TextBlock Text="{Binding CurrentRpm, StringFormat='{}{0} RPM'}" Foreground="Orange" Margin="10,0" VerticalAlignment="Bottom" FontSize="14" FontWeight="Bold"/>
                         </StackPanel>
 
-                        <lvc:CartesianChart Grid.Row="1" Series="{Binding RpmSeries}" Margin="0,15,0,0"/>
+                        <lvc:CartesianChart Grid.Row="1" Series="{Binding RpmSeries}" XAxes="{Binding XAxes}" Margin="0,15,0,0"/>
                     </Grid>
                 </Border>
             </Grid>
