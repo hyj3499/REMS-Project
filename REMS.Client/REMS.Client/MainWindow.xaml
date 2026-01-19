@@ -98,11 +98,13 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
+
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="📶 Wi-Fi Signal Strength (RSSI)" Foreground="#AAAAAA" FontSize="18" FontWeight="Bold"/>
-                            <TextBlock Text="(Live)" Foreground="Red" Margin="10,0" VerticalAlignment="Bottom" FontSize="12"/>
+                            <TextBlock Text="{Binding WifiRssi, StringFormat='{}{0} dBm'}" Foreground="#00CCFF" Margin="15,0" VerticalAlignment="Bottom" FontSize="14" FontWeight="Bold"/>
                         </StackPanel>
-                        <lvc:CartesianChart Grid.Row="1" Series="{Binding TempSeries}" Margin="0,15,0,0"/>
+
+                        <lvc:CartesianChart Grid.Row="1" Series="{Binding RssiSeries}" Margin="0,15,0,0"/>
                     </Grid>
                 </Border>
 
@@ -112,11 +114,13 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
+
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="⚙️ Motor Output (RPM)" Foreground="#AAAAAA" FontSize="18" FontWeight="Bold"/>
-                            <TextBlock Text="Current Load: 80%" Foreground="Orange" Margin="10,0" VerticalAlignment="Bottom" FontSize="14" FontWeight="Bold"/>
+                            <TextBlock Text="Live Monitoring" Foreground="Orange" Margin="10,0" VerticalAlignment="Bottom" FontSize="14" FontWeight="Bold"/>
                         </StackPanel>
-                        <lvc:CartesianChart Grid.Row="1" Series="{Binding MotorSeries}" Margin="0,15,0,0"/>
+
+                        <lvc:CartesianChart Grid.Row="1" Series="{Binding RpmSeries}" Margin="0,15,0,0"/>
                     </Grid>
                 </Border>
             </Grid>

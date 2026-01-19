@@ -16,11 +16,11 @@ namespace REMS.Client
     public partial class MainViewModel : ObservableObject
     {
         // [1] 차트 데이터
-        private readonly ObservableCollection<double> _tempValues;
-        public ISeries[] TempSeries { get; set; }
+        private readonly ObservableCollection<double> _rssiValues;
+        public ISeries[] RssiSeries { get; set; }
 
-        private readonly ObservableCollection<double> _motorValues;
-        public ISeries[] MotorSeries { get; set; }
+        private readonly ObservableCollection<double> _rpmValues;
+        public ISeries[] RpmSeries { get; set; }
 
         // [2] 상태 데이터
         [ObservableProperty]
@@ -31,6 +31,9 @@ namespace REMS.Client
 
         [ObservableProperty]
         private string _logText = "";
+
+        [ObservableProperty]
+        private int _wifiRssi = -100;
 
         // [3] 통신용 변수
         private TcpClient _client;
@@ -43,35 +46,39 @@ namespace REMS.Client
         public MainViewModel()
         {
 
-            _tempValues = new ObservableCollection<double>();
-            _motorValues = new ObservableCollection<double>();
+            _rssiValues = new ObservableCollection<double>();
+            _rpmValues = new ObservableCollection<double>();
 
             // 차트가 비어있으면 에러가 나니까, 0으로 채워진 빈 데이터를 미리 30개 정도 넣어둠
-            for (int i = 0; i < 30; i++) { _tempValues.Add(0); _motorValues.Add(0); }
-
-            TempSeries = new ISeries[]
+            for (int i = 0; i < 60; i++)
             {
+                _rssiValues.Add(-100); // RSSI 기본값은 낮게
+                _rpmValues.Add(0);     // RPM 기본값 0
+            }
+
+            RssiSeries = new ISeries[]            {
                 new LineSeries<double>
                 {
-                    Values = _tempValues,
-                    Fill = new SolidColorPaint(SKColors.Cyan.WithAlpha(50)),
-                    GeometrySize = 0,
-                    Stroke = new SolidColorPaint(SKColors.Cyan) { StrokeThickness = 3 },
-                    Name = "Temperature"
+                    Values = _rssiValues,
+                    Fill = null, // 선만 보이게 (채우기 없음)
+                    GeometrySize = 5, // 점 크기
+                    Stroke = new SolidColorPaint(SKColors.LimeGreen) { StrokeThickness = 2 }, // 초록색 선
+                    Name = "Wi-Fi RSSI (dBm)"
                 }
             };
 
-            MotorSeries = new ISeries[]
-            {
-                new StepLineSeries<double>
+            RpmSeries = new ISeries[]
+                        {
+                new LineSeries<double> // 실제 속도는 부드러우니까 LineSeries 추천
                 {
-                    Values = _motorValues,
+                    Values = _rpmValues,
                     Fill = new SolidColorPaint(SKColors.Orange.WithAlpha(50)),
                     GeometrySize = 0,
-                    Stroke = new SolidColorPaint(SKColors.Orange) { StrokeThickness = 3 },
-                    Name = "Motor Output"
+                    Stroke = new SolidColorPaint(SKColors.Orange) { StrokeThickness = 2 },
+                    Name = "Actual RPM"
                 }
             };
+
             AddLog("[SYS] REMS 클라이언트 시작됨");
             AddLog("[SYS] 모니터링 시스템 대기 중...");
         }
@@ -110,7 +117,7 @@ namespace REMS.Client
             {
                 while (IsConnected)
                 {
-                    // 서버가 보낸 한 줄 읽기 ("TEMP:24.5,MOTOR:80")
+                    // 서버가 보낸 한 줄 읽기
                     string message = await _reader.ReadLineAsync();
                     if (message == null) break;
 
@@ -135,32 +142,37 @@ namespace REMS.Client
         // [6] 데이터 해석기 (Parsing)
         private void ParseAndVisualize(string rawData)
         {
-            // rawData 예시: "TEMP:24.5,MOTOR:80"
+            // rawData 예시: "RSSI:-65,RPM:1250"
             try
             {
-                var parts = rawData.Split(','); // 쉼표로 자름
+                var parts = rawData.Split(','); // 쉼표로 분리
                 foreach (var part in parts)
                 {
-                    var keyValue = part.Split(':'); // 콜론으로 자름
-                    string key = keyValue[0];       // "TEMP"
-                    double value = double.Parse(keyValue[1]); // 24.5
+                    var keyValue = part.Split(':'); // 콜론으로 분리
+                    if (keyValue.Length != 2) continue;
 
-                    if (key == "TEMP")
+                    string key = keyValue[0];            // "RSSI" 또는 "RPM"
+                    double value = double.Parse(keyValue[1]); // 숫자값
+
+                    if (key == "RSSI")
                     {
-                        // 그래프 업데이트 (오래된 거 지우고 새거 추가)
-                        _tempValues.RemoveAt(0);
-                        _tempValues.Add(value); //꺼낸 숫자를 _tempValues.Add(value)로 리스트에 넣으면 -> 자동으로 그래프가 그려짐
+                        // 1. 차트 업데이트 (오래된 데이터 삭제 후 추가)
+                        if (_rssiValues.Count > 30) _rssiValues.RemoveAt(0);
+                        _rssiValues.Add(value);
+
+                        // 2. [중요] UI 게이지바용 변수 업데이트
+                        WifiRssi = (int)value;
                     }
-                    else if (key == "MOTOR")
+                    else if (key == "RPM")
                     {
-                        _motorValues.RemoveAt(0);
-                        _motorValues.Add(value);
+                        if (_rpmValues.Count > 30) _rpmValues.RemoveAt(0);
+                        _rpmValues.Add(value);
                     }
                 }
             }
             catch
             {
-                // 데이터가 깨져서 오면 무시
+                // 데이터 파싱 에러 무시
             }
         }
 

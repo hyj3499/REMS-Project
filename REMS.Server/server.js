@@ -34,23 +34,21 @@ const server = net.createServer((socket) => {
     // ----------------------------------------------------
     const intervalId = setInterval(() => {
         // 1. 테스트용 가짜 센서 데이터 생성 (랜덤)
-        const temp = (20 + Math.random() * 10).toFixed(1); // 20.0 ~ 30.0도
-        const motorLoad = Math.floor(Math.random() * 100); // 0 ~ 100%
-
+        const rssi = Math.floor(Math.random() * ( -40 - (-90) + 1)) + -90;
+        const rpm = Math.floor(Math.random() * (3000 - 1000 + 1)) + 1000;
+        
         // 2. WPF로 전송 (화면에 그리기용)
-        // 형식: "TEMP:24.5,MOTOR:80\n"
-        const dataToSend = `TEMP:${temp},MOTOR:${motorLoad}\n`;
+        const dataToSend = `RSSI:${rssi},RPM:${rpm}\n`;
         socket.write(dataToSend);
         
         // 3. MySQL DB에 저장
-        const sql = `INSERT INTO sensor_logs (temperature, motor_load) VALUES (?, ?)`;
+        const sql = `INSERT INTO sensor_logs (rssi, rpm) VALUES (?, ?)`;        
         
-        dbConnection.query(sql, [temp, motorLoad], (err, result) => {
+        dbConnection.query(sql, [rssi, rpm], (err, result) => {
             if (err) {
                 console.log('⚠️ DB 저장 실패:', err.message);
             } else {
-                console.log(`💾 DB Saved: Temp=${temp}, Motor=${motorLoad}`);
-            }
+                console.log(`💾 DB Saved: RSSI=${rssi}dBm, RPM=${rpm}`);            }
         });
 
         // 서버 화면에 점(.)을 찍어서 작동 중임을 표시
@@ -68,9 +66,20 @@ const server = net.createServer((socket) => {
 
         if (command === 'LED_ON') {
             console.log("👉 [제어] LED를 켭니다 (ON)");
-            // 실제 하드웨어가 있다면 여기서 신호를 보냅니다.
+
         } else if (command === 'LED_OFF') {
             console.log("👉 [제어] LED를 끕니다 (OFF)");
+        }
+
+        // 추가: 모터 제어 명령 수신 로그
+        else if (command === 'MOTOR_RUN') {
+            console.log("👉 [제어] 모터 가동 시작");
+        }
+        else if (command === 'MOTOR_PAUSE') {
+            console.log("👉 [제어] 모터 정지");
+        }
+        else if (command.startsWith('PWM:')) {
+             console.log(`👉 [제어] 속도 설정: ${command.split(':')[1]}%`);
         }
     });
 
