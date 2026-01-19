@@ -34,6 +34,8 @@ namespace REMS.Client
         private TcpClient _client;
         private StreamReader _reader;
         private StreamWriter _writer;
+
+        [ObservableProperty]
         private bool _isConnected = false;
 
         public MainViewModel()
@@ -75,7 +77,7 @@ namespace REMS.Client
         // [4] 서버 연결 함수
         public async void ConnectToServer(string ip, int port)
         {
-            if (_isConnected) return; // 이미 연결됐으면 패스
+            if (IsConnected) return; // 이미 연결됐으면 패스
 
             try
             {
@@ -86,7 +88,7 @@ namespace REMS.Client
 
                 _reader = new StreamReader(_client.GetStream());
                 _writer = new StreamWriter(_client.GetStream()) { AutoFlush = true };
-                _isConnected = true;
+                IsConnected = true;
 
                 AddLog("[NET] ✅ 서버 연결 성공!");
 
@@ -104,7 +106,7 @@ namespace REMS.Client
         {
             try
             {
-                while (_isConnected)
+                while (IsConnected)
                 {
                     // 서버가 보낸 한 줄 읽기 ("TEMP:24.5,MOTOR:80")
                     string message = await _reader.ReadLineAsync();
@@ -124,7 +126,7 @@ namespace REMS.Client
             finally
             {
                 _client?.Close();
-                _isConnected = false;
+                IsConnected = false;
             }
         }
 
@@ -163,7 +165,7 @@ namespace REMS.Client
         // [7] 서버로 명령 보내기 (LED, MOTOR 제어)
         public void SendCommand(string command)
         {
-            if (_isConnected && _writer != null)
+            if (IsConnected && _writer != null)
             {
                 _writer.WriteLine(command); // 서버로 전송!
                 AddLog($"[TX] 명령 전송: {command}");

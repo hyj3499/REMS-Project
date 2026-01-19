@@ -15,14 +15,48 @@
 
         <Border Grid.Row="0" Background="#1E1E1E" CornerRadius="10" Margin="0,0,0,10">
             <Grid>
-                <TextBlock Text="🏭 REMS : Remote Equipment Monitoring &amp; Control System" 
+                <TextBlock Text="REMS : Remote Equipment Monitoring &amp; Control System" 
                            Foreground="White" VerticalAlignment="Center" Margin="25,0" 
                            FontSize="24" FontWeight="Bold"/>
                 
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="25,0">
-                    <Border x:Name="StatusIndicator" Background="#555555" CornerRadius="50" Width="15" Height="15" Margin="0,0,10,0"/>
-                    <TextBlock Text="System Ready" Foreground="#AAAAAA" FontSize="16" FontWeight="Bold"/>
-                </StackPanel>
+  <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="25,0">
+    
+    <Border x:Name="StatusIndicator" CornerRadius="50" Width="15" Height="15" Margin="0,0,10,0">
+        <Border.Style>
+            <Style TargetType="Border">
+                <Setter Property="Background" Value="#555555"/>
+                
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                        <Setter Property="Background" Value="#00FF00"/>
+                        <Setter Property="Effect">
+                            <Setter.Value>
+                                <DropShadowEffect Color="#00FF00" BlurRadius="10" ShadowDepth="0" Opacity="0.8"/>
+                            </Setter.Value>
+                        </Setter>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Border.Style>
+    </Border>
+
+    <TextBlock FontSize="16" FontWeight="Bold">
+        <TextBlock.Style>
+            <Style TargetType="TextBlock">
+                <Setter Property="Text" Value="Offline"/>
+                <Setter Property="Foreground" Value="#AAAAAA"/>
+                
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                        <Setter Property="Text" Value="Online"/>
+                        <Setter Property="Foreground" Value="#00FF00"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </TextBlock.Style>
+    </TextBlock>
+    
+</StackPanel>
             </Grid>
         </Border>
 
