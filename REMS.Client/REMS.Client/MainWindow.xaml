@@ -6,7 +6,7 @@
         xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
         xmlns:local="clr-namespace:REMS.Client"
         mc:Ignorable="d"
-        Title="REMS - Smart Factory Monitor" Height="900" Width="1400"
+        Title="REMS : Remote Equipment Monitoring &amp; Control System" Height="900" Width="1400"
         Background="#121212">
 
     <Grid Margin="15">
@@ -18,7 +18,7 @@
 
         <Border Grid.Row="0" Background="#1E1E1E" CornerRadius="10" Margin="0,0,0,10">
             <Grid>
-                <TextBlock Text="REMS : Integrated Control System" 
+                <TextBlock Text="REMS : Remote Equipment Monitoring &amp; Control System" 
                            Foreground="White" VerticalAlignment="Center" Margin="25,0" 
                            FontSize="24" FontWeight="Bold"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="25,0">
