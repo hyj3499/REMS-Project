@@ -3,50 +3,194 @@ using LiveChartsCore;
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
 using SkiaSharp;
+using System;
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Net.Sockets;       // 소켓 통신용
+using System.Threading.Tasks;   // 비동기 작업용
+using System.Windows;           // UI 업데이트용
 
 namespace REMS.Client
 {
     public partial class MainViewModel : ObservableObject
     {
-        // 1. 온도 차트 데이터
+        // [1] 차트 데이터
         private readonly ObservableCollection<double> _tempValues;
         public ISeries[] TempSeries { get; set; }
 
-        // 2. 모터 PDW(PWM) 차트 데이터
         private readonly ObservableCollection<double> _motorValues;
         public ISeries[] MotorSeries { get; set; }
 
+        // [2] 상태 데이터
+        [ObservableProperty]
+        private bool _isLedOn;
+        [ObservableProperty]
+        private string _ledStatusText = "OFF";
+
+        [ObservableProperty]
+        private string _logText = "[System] Ready...";
+
+        // [3] 통신용 변수
+        private TcpClient _client;
+        private StreamReader _reader;
+        private StreamWriter _writer;
+        private bool _isConnected = false;
+
         public MainViewModel()
         {
-            // 1. 온도 데이터 초기화
-            _tempValues = new ObservableCollection<double> { 20, 22, 25, 24, 26, 28, 30, 29, 28 };
+
+            _tempValues = new ObservableCollection<double>();
+            _motorValues = new ObservableCollection<double>();
+
+            // 차트가 비어있으면 에러가 나니까, 0으로 채워진 빈 데이터를 미리 30개 정도 넣어둠
+            for (int i = 0; i < 30; i++) { _tempValues.Add(0); _motorValues.Add(0); }
+
             TempSeries = new ISeries[]
             {
                 new LineSeries<double>
                 {
                     Values = _tempValues,
-                    Fill = new SolidColorPaint(SKColors.Cyan.WithAlpha(50)), // 반투명 채우기
+                    Fill = new SolidColorPaint(SKColors.Cyan.WithAlpha(50)),
                     GeometrySize = 0,
-                    LineSmoothness = 1,
                     Stroke = new SolidColorPaint(SKColors.Cyan) { StrokeThickness = 3 },
                     Name = "Temperature"
                 }
             };
 
-            // 2. 모터 데이터 초기화 
-            _motorValues = new ObservableCollection<double> { 0, 50, 80, 100, 100, 80, 60, 40, 0 };
             MotorSeries = new ISeries[]
             {
-                new StepLineSeries<double> 
+                new StepLineSeries<double>
                 {
                     Values = _motorValues,
                     Fill = new SolidColorPaint(SKColors.Orange.WithAlpha(50)),
                     GeometrySize = 0,
                     Stroke = new SolidColorPaint(SKColors.Orange) { StrokeThickness = 3 },
-                    Name = "Motor Output (PWM)"
+                    Name = "Motor Output"
                 }
             };
+        }
+
+        // [4] 서버 연결 함수
+        public async void ConnectToServer(string ip, int port)
+        {
+            if (_isConnected) return; // 이미 연결됐으면 패스
+
+            try
+            {
+                AddLog($"Connecting to {ip}:{port}...");
+
+                _client = new TcpClient();
+                await _client.ConnectAsync(ip, port); // 비동기 연결 시도
+
+                _reader = new StreamReader(_client.GetStream());
+                _writer = new StreamWriter(_client.GetStream()) { AutoFlush = true };
+                _isConnected = true;
+
+                AddLog("✅ Connected to Server!");
+
+                // 연결되자마자 데이터 수신 시작 (별도 스레드)
+                _ = Task.Run(ReceiveDataLoop);
+            }
+            catch (Exception ex)
+            {
+                AddLog($"❌ Connection Error: {ex.Message}");
+            }
+        }
+
+        // [5] 데이터 수신 루프
+        private async Task ReceiveDataLoop()
+        {
+            try
+            {
+                while (_isConnected)
+                {
+                    // 서버가 보낸 한 줄 읽기 ("TEMP:24.5,MOTOR:80")
+                    string message = await _reader.ReadLineAsync();
+                    if (message == null) break;
+
+                    // UI 업데이트는 메인 스레드에서 해야 함! (중요)
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        ParseAndVisualize(message); //데이터 해석기 호출
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Application.Current.Dispatcher.Invoke(() => AddLog("⚠️ Disconnected from server."));
+            }
+            finally
+            {
+                _client?.Close();
+                _isConnected = false;
+            }
+        }
+
+        // [6] 데이터 해석기 (Parsing)
+        private void ParseAndVisualize(string rawData)
+        {
+            // rawData 예시: "TEMP:24.5,MOTOR:80"
+            try
+            {
+                var parts = rawData.Split(','); // 쉼표로 자름
+                foreach (var part in parts)
+                {
+                    var keyValue = part.Split(':'); // 콜론으로 자름
+                    string key = keyValue[0];       // "TEMP"
+                    double value = double.Parse(keyValue[1]); // 24.5
+
+                    if (key == "TEMP")
+                    {
+                        // 그래프 업데이트 (오래된 거 지우고 새거 추가)
+                        _tempValues.RemoveAt(0); 
+                        _tempValues.Add(value); //꺼낸 숫자를 _tempValues.Add(value)로 리스트에 넣으면 -> 자동으로 그래프가 그려짐
+                    }
+                    else if (key == "MOTOR")
+                    {
+                        _motorValues.RemoveAt(0);
+                        _motorValues.Add(value);
+                    }
+                }
+            }
+            catch
+            {
+                // 데이터가 깨져서 오면 무시
+            }
+        }
+
+        // [7] 서버로 명령 보내기 (LED, MOTOR 제어)
+        public void SendCommand(string command)
+        {
+            if (_isConnected && _writer != null)
+            {
+                _writer.WriteLine(command); // 서버로 전송!
+                AddLog($"[Sent] {command}");
+            }
+        }
+
+        // LED 토글 (기존 기능 + 서버 전송 추가)
+        public void ToggleLed()
+        {
+            IsLedOn = !IsLedOn;
+
+            // 서버로 전송
+            if (IsLedOn)
+            {
+                LedStatusText = "ON";
+                SendCommand("LED_ON");
+            }
+            else
+            {
+                LedStatusText = "OFF";
+                SendCommand("LED_OFF");
+            }
+        }
+
+        // 로그 추가 헬퍼
+        private void AddLog(string msg)
+        {
+            string time = DateTime.Now.ToString("HH:mm:ss");
+            LogText = $"[{time}] {msg}\n" + LogText; // 최신 로그가 위로 오게
         }
     }
 }
