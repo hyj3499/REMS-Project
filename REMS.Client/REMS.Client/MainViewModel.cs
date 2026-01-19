@@ -1,4 +1,5 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using LiveChartsCore;
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
@@ -24,8 +25,7 @@ namespace REMS.Client
         // [2] 상태 데이터
         [ObservableProperty]
         private bool _isLedOn;
-        [ObservableProperty]
-        private string _ledStatusText = "OFF";
+
 
         [ObservableProperty]
         private string _logText = "";
@@ -172,21 +172,24 @@ namespace REMS.Client
             }
         }
 
-        // LED 토글 (기존 기능 + 서버 전송 추가)
-        public void ToggleLed()
+        // LED ON/OFF
+        [RelayCommand]
+        public void TurnLedOn()
         {
-            IsLedOn = !IsLedOn;
+            if (!IsLedOn) 
+            {
+                IsLedOn = true;         // UI에 빨간불 켜기
+                SendCommand("LED_ON");  // 서버 전송
+            }
+        }
 
-            // 서버로 전송
+        [RelayCommand]
+        public void TurnLedOff()
+        {
             if (IsLedOn)
             {
-                LedStatusText = "ON";
-                SendCommand("LED_ON");
-            }
-            else
-            {
-                LedStatusText = "OFF";
-                SendCommand("LED_OFF");
+                IsLedOn = false;        
+                SendCommand("LED_OFF"); 
             }
         }
 

@@ -19,9 +19,5 @@ namespace REMS.Client
             _viewModel.ConnectToServer("127.0.0.1", 5000);
         }
 
-        private void BtnLed_Click(object sender, RoutedEventArgs e)
-        {
-            _viewModel.ToggleLed();
-        }
     }
 }

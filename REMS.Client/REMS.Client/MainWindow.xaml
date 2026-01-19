@@ -126,10 +126,40 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Ellipse Width="60" Height="60" Fill="#333333" Stroke="Gray" StrokeThickness="2"/>
+
+                            <Ellipse Width="60" Height="60" Stroke="Gray" StrokeThickness="2">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Setter Property="Fill" Value="#333333"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsLedOn}" Value="True">
+                                                <Setter Property="Fill" Value="#FF4500"/>
+                                                <Setter Property="Effect">
+                                                    <Setter.Value>
+                                                        <DropShadowEffect Color="#FF4500" BlurRadius="20" ShadowDepth="0" Opacity="1"/>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+
                             <UniformGrid Grid.Column="1" Columns="2" Rows="1" Margin="20,0,0,0">
-                                <Button Content="ON" Background="#007ACC" Foreground="White" Margin="2" FontWeight="Bold" BorderThickness="0"/>
-                                <Button Content="OFF" Background="#333333" Foreground="White" Margin="2" FontWeight="Bold" BorderThickness="0"/>
+                                <Button Content="ON" Command="{Binding TurnLedOnCommand}" Background="#007ACC" Foreground="White" Margin="2" FontWeight="Bold" BorderThickness="0">
+                                    <Button.Resources>
+                                        <Style TargetType="Border">
+                                            <Setter Property="CornerRadius" Value="5"/>
+                                        </Style>
+                                    </Button.Resources>
+                                </Button>
+                                <Button Content="OFF" Command="{Binding TurnLedOffCommand}" Background="#333333" Foreground="White" Margin="2" FontWeight="Bold" BorderThickness="0">
+                                    <Button.Resources>
+                                        <Style TargetType="Border">
+                                            <Setter Property="CornerRadius" Value="5"/>
+                                        </Style>
+                                    </Button.Resources>
+                                </Button>
                             </UniformGrid>
                         </Grid>
                     </StackPanel>
