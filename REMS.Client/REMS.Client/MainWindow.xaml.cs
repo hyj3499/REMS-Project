@@ -13,12 +13,6 @@ namespace REMS.Client
             this.DataContext = _viewModel;
         }
 
-
-        private void BtnConnect_Click(object sender, RoutedEventArgs e)
-        {
-            _viewModel.ConnectToServer("127.0.0.1", 5000);
-        }
-
         private void Button_Click(object sender, RoutedEventArgs e)
         {
 

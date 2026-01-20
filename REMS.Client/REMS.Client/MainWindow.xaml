@@ -72,7 +72,7 @@
 
                 <TextBlock Text="Port" Foreground="Gray" VerticalAlignment="Center" Margin="15,0,5,0"/>
                 <TextBox Text="5000" Width="60" Height="26" VerticalContentAlignment="Center" Background="#333333" Foreground="White" BorderThickness="0" Padding="5,0"/>
-                <Button Content="CONNECT" Click="BtnConnect_Click" Width="100" Height="30" Margin="20,0,0,0" Background="#007ACC" Foreground="White" FontWeight="Bold" BorderThickness="0"/>
+                <Button Content="CONNECT" Command="{Binding ConnectCommand}" Width="100" Height="30" Margin="20,0,0,0" Background="#007ACC" Foreground="White" FontWeight="Bold" BorderThickness="0"/>
 
                 <TextBlock Text="⚠️ Alarm Limit :" Foreground="#AAAAAA" VerticalAlignment="Center" FontWeight="Bold" Margin="40,0,10,0"/>
                 <TextBox Text="50.0" Width="50" Height="26" VerticalContentAlignment="Center" Background="#333333" Foreground="White" BorderThickness="0" Padding="5,0"/>
