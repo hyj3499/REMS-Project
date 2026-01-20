@@ -192,6 +192,11 @@ namespace REMS.Client
                         _rpmValues.Add(value);
                         CurrentRpm = (int)value;
                     }
+                    else if (key == "PWM")
+                    {
+                        _motorSpeed = (int)value;
+                        OnPropertyChanged(nameof(MotorSpeed));
+                    }
                 }
             }
             catch

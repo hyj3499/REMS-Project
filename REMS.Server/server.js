@@ -96,7 +96,7 @@ const server = net.createServer((socket) => {
         }
         
         // 2. WPF로 전송 (화면에 그리기용)
-        const dataToSend = `RSSI:${rssi},RPM:${rpm}\n`;
+        const dataToSend = `RSSI:${rssi},RPM:${rpm},PWM:${targetPwm}\n`;
         socket.write(dataToSend);
         
         // 3. MySQL DB에 저장
