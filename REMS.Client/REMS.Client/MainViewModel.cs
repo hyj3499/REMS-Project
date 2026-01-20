@@ -238,14 +238,8 @@ namespace REMS.Client
         [RelayCommand]
         public void PauseMotor()
         {
-            SendCommand("MOTOR_PAUSE");
-        }
-
-        [RelayCommand]
-        public void EmergencyStop()
-        {
             SendCommand("EMERGENCY_STOP");
-            MotorSpeed = 0; // 속도도 0으로 초기화
+            MotorSpeed = 0; 
             TurnLedOff();
         }
 

@@ -197,7 +197,7 @@
                                 </Button.Resources>
                             </Button>
 
-                            <Button Grid.Column="1" Command="{Binding PauseMotorCommand}" Margin="2" Background="#555555" Content="PAUSE" Foreground="White" FontWeight="Bold" BorderThickness="0">
+                            <Button Grid.Column="1" Command="{Binding PauseMotorCommand}" Margin="2" Background="#8B0000" Content="⚠️ EMERGENCY STOP" Foreground="White" FontWeight="Bold" BorderThickness="0" Click="Button_Click">
                                 <Button.Resources>
                                     <Style TargetType="Border">
                                         <Setter Property="CornerRadius" Value="5"/>
@@ -222,7 +222,7 @@
                             </Button.Resources>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="⚠️" FontSize="20" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                <TextBlock Text="EMERGENCY STOP" Foreground="White" FontWeight="Bold" FontSize="18" VerticalAlignment="Center"/>
+                                <TextBlock Text="⚠️ EMERGENCY STOP" Foreground="White" FontWeight="Bold" FontSize="18" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                     </StackPanel>

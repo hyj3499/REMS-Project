@@ -87,7 +87,7 @@ const server = net.createServer((socket) => {
             isMotorRunning = true;
             console.log("👉 [상태] 모터 가동 (isMotorRunning = true)");
         } 
-        else if (command === 'MOTOR_PAUSE' || command === 'EMERGENCY_STOP') {
+        else if (command === 'EMERGENCY_STOP') {
             isMotorRunning = false;
             console.log("👉 [상태] 모터 정지 (isMotorRunning = false)");
         }

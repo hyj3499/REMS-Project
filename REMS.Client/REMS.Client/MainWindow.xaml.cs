@@ -19,5 +19,9 @@ namespace REMS.Client
             _viewModel.ConnectToServer("127.0.0.1", 5000);
         }
 
+        private void Button_Click(object sender, RoutedEventArgs e)
+        {
+
+        }
     }
 }
