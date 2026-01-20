@@ -65,8 +65,8 @@ namespace REMS.Client
                 {
                     Values = _rssiValues,
                     Fill = null, // 선만 보이게 (채우기 없음)
-                    GeometrySize = 5, // 점 크기
-                    Stroke = new SolidColorPaint(SKColors.LimeGreen) { StrokeThickness = 2 }, // 초록색 선
+                    GeometrySize = 0, // 점 크기
+                    Stroke = new SolidColorPaint(SKColors.DeepSkyBlue) { StrokeThickness = 2 },
                     Name = "Wi-Fi RSSI (dBm)"
                 }
             };
