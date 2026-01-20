@@ -1,6 +1,7 @@
 const net = require('net');      // 소켓 통신 모듈 (WPF 연결용)
 const mysql = require('mysql2'); // MySQL DB 모듈 (데이터 저장용)
 
+
 // ==========================================
 // [1] MySQL 데이터베이스 연결 설정
 // ==========================================
@@ -31,6 +32,52 @@ const server = net.createServer((socket) => {
 
     let targetPwm = 50; 
     let isMotorRunning = false;
+    const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+
+    // 자동 시퀀스 비동기 함수 정의
+    async function runAutoSequence() {
+        try {
+            // Step 1
+            isMotorRunning = true;
+            targetPwm = 0;
+            socket.write(`LOG:[AUTO] STEP1: 안전 점검 시작\n`);
+            for (let i = 3; i > 0; i--) {
+                socket.write(`LOG:[AUTO] 장비 점검 중... (${i}초/3초 경과)\n`);
+                await delay(1000);
+            }
+
+            // Step 2
+            targetPwm = 30;
+            socket.write(`LOG:[AUTO] STEP2: 모터 가속 [PWM 30%]\n`);
+            for (let i = 1; i <= 5; i++) {
+                socket.write(`LOG:[AUTO] 가속 유지 중... (${i}/5초 경과)\n`);
+                await delay(1000);
+            }
+
+            // Step 3
+            targetPwm = 85;
+            socket.write(`LOG:[AUTO] STEP3: 메인 공정 진입 [PWM 85%]\n`);
+            for (let i = 1; i <= 10; i++) {
+                if (i % 5 === 0 || i === 1) {
+                    socket.write(`LOG:[AUTO] 고속 운전 중... (${i}/10초 경과)\n`);
+                }
+                await delay(1000);
+            }
+
+            // Step 4 & 완료
+            targetPwm = 15;
+            socket.write(`LOG:[AUTO] STEP4: 공정 종료 및 감속 시작 [PWM 15%]\n`);
+            await delay(3000);
+
+            isMotorRunning = false;
+            targetPwm = 0;
+            socket.write("LOG:[AUTO] 모든 자동 공정 시퀀스가 정상 종료되었습니다.\n");
+
+        } catch (err) {
+            socket.write("LOG:[AUTO] ❌ 시퀀스 수행 중 오류 발생\n");
+        }
+    }
 
     // ----------------------------------------------------
     // [기능 1] 1초마다 데이터 생성 -> WPF 전송 -> DB 저장
@@ -62,6 +109,7 @@ const server = net.createServer((socket) => {
                 console.log(`💾 DB Saved: RSSI=${rssi}dBm, RPM=${rpm}`);            }
         });
 
+
         // 서버 화면에 점(.)을 찍어서 작동 중임을 표시
         process.stdout.write(`.`); 
 
@@ -81,7 +129,9 @@ const server = net.createServer((socket) => {
         } else if (command === 'LED_OFF') {
             console.log("👉 [제어] LED를 끕니다 (OFF)");
         }
-
+        if (command === 'AUTO_START') {
+            runAutoSequence(); 
+        }
         // 추가: 모터 제어 명령 수신 로그
         if (command === 'MOTOR_RUN') {
             isMotorRunning = true;

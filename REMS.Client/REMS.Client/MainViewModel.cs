@@ -135,10 +135,19 @@ namespace REMS.Client
                     string message = await _reader.ReadLineAsync();
                     if (message == null) break;
 
-                    // UI 업데이트는 메인 스레드에서 해야 함! (중요)
                     Application.Current.Dispatcher.Invoke(() =>
                     {
-                        ParseAndVisualize(message); //데이터 해석기 호출
+                        // [추가] 서버에서 온 메시지가 LOG로 시작하는 경우
+                        if (message.StartsWith("LOG:"))
+                        {
+                            string logContent = message.Substring(4); // "LOG:" 이후 글자만 추출
+                            AddLog(logContent);
+                        }
+                        else
+                        {
+                            // 기존 센서 데이터(RSSI, RPM) 처리
+                            ParseAndVisualize(message);
+                        }
                     });
                 }
             }
@@ -241,6 +250,13 @@ namespace REMS.Client
             SendCommand("EMERGENCY_STOP");
             MotorSpeed = 0; 
             TurnLedOff();
+        }
+
+        [RelayCommand]
+        public void AutoStart()
+        {
+            SendCommand("AUTO_START");
+            AddLog("[SYS] 자동 공정 시퀀스 시작 명령을 전송했습니다.");
         }
 
         // 로그 추가 헬퍼

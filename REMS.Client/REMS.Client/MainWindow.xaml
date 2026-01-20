@@ -214,15 +214,38 @@
 
                         <Slider Maximum="100" Value="{Binding MotorSpeed}" TickFrequency="1" IsSnapToTickEnabled="True" AutoToolTipPlacement="TopLeft"/>
 
-                        <Button Command="{Binding EmergencyStopCommand}" Height="50" Margin="0,20,0,0" Background="#8B0000" BorderBrush="Red" BorderThickness="2">
-                            <Button.Resources>
-                                <Style TargetType="Border">
-                                    <Setter Property="CornerRadius" Value="5"/>
+                        <Button Command="{Binding AutoStartCommand}" Height="60" Margin="0,20,0,0" Cursor="Hand" BorderThickness="0">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Background" Value="#FFB900"/>
+                                    <Setter Property="Foreground" Value="#121212"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="8" BorderThickness="1" BorderBrush="#CC9900">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Background" Value="#FFCC33"/>
+                                                        <Setter TargetName="border" Property="Effect">
+                                                            <Setter.Value>
+                                                                <DropShadowEffect Color="#FFB900" BlurRadius="15" ShadowDepth="0" Opacity="0.6"/>
+                                                            </Setter.Value>
+                                                        </Setter>
+                                                    </Trigger>
+                                                    <Trigger Property="IsPressed" Value="True">
+                                                        <Setter Property="Background" Value="#E5A700"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
                                 </Style>
-                            </Button.Resources>
+                            </Button.Style>
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="⚠️" FontSize="20" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                <TextBlock Text="⚠️ EMERGENCY STOP" Foreground="White" FontWeight="Bold" FontSize="18" VerticalAlignment="Center"/>
+                                <TextBlock Text="▶" FontSize="16" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <TextBlock Text="AUTO START SEQUENCE" FontWeight="ExtraBold" FontSize="16" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                     </StackPanel>
