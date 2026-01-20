@@ -29,13 +29,24 @@ const HOST = '0.0.0.0'; // 모든 IP에서 접속 허용
 const server = net.createServer((socket) => {
     console.log(`✅ 새로운 클라이언트 접속: ${socket.remoteAddress}`);
 
+    let targetPwm = 50; 
+    let isMotorRunning = false;
+
     // ----------------------------------------------------
     // [기능 1] 1초마다 데이터 생성 -> WPF 전송 -> DB 저장
     // ----------------------------------------------------
     const intervalId = setInterval(() => {
         // 1. 테스트용 가짜 센서 데이터 생성 (랜덤)
         const rssi = Math.floor(Math.random() * ( -40 - (-90) + 1)) + -90;
-        const rpm = Math.floor(Math.random() * (3000 - 1000 + 1)) + 1000;
+    // 2. [변경] PWM 값에 비례하는 가짜 RPM 생성
+        // 모터가 꺼져있으면 0, 켜져있으면 PWM * 30 (최대 3000 RPM 가정) + 약간의 오차
+        let rpm = 0;
+        if (isMotorRunning) {
+            const baseRpm = targetPwm * 30; // 100%일 때 3000 RPM
+            const noise = Math.floor(Math.random() * 40) - 20; // ±20 오차 추가
+            rpm = baseRpm + noise;
+            if (rpm < 0) rpm = 0;
+        }
         
         // 2. WPF로 전송 (화면에 그리기용)
         const dataToSend = `RSSI:${rssi},RPM:${rpm}\n`;
@@ -72,14 +83,18 @@ const server = net.createServer((socket) => {
         }
 
         // 추가: 모터 제어 명령 수신 로그
-        else if (command === 'MOTOR_RUN') {
-            console.log("👉 [제어] 모터 가동 시작");
-        }
-        else if (command === 'MOTOR_PAUSE') {
-            console.log("👉 [제어] 모터 정지");
+        if (command === 'MOTOR_RUN') {
+            isMotorRunning = true;
+            console.log("👉 [상태] 모터 가동 (isMotorRunning = true)");
+        } 
+        else if (command === 'MOTOR_PAUSE' || command === 'EMERGENCY_STOP') {
+            isMotorRunning = false;
+            console.log("👉 [상태] 모터 정지 (isMotorRunning = false)");
         }
         else if (command.startsWith('PWM:')) {
-             console.log(`👉 [제어] 속도 설정: ${command.split(':')[1]}%`);
+            const receivedValue = command.split(':')[1];
+            targetPwm = parseInt(receivedValue);
+            console.log(`👉 [설정] 목표 속도: ${targetPwm}%`);
         }
     });
 
