@@ -1,169 +1,216 @@
-const net = require('net');      // 소켓 통신 모듈 (WPF 연결용)
-const mysql = require('mysql2'); // MySQL DB 모듈 (데이터 저장용)
-
+const net = require('net');      // 소켓 통신 모듈
+const mysql = require('mysql2'); // MySQL DB 모듈
 
 // ==========================================
-// [1] MySQL 데이터베이스 연결 설정
+// [1] 환경 설정 (Configuration)
 // ==========================================
-const dbConnection = mysql.createConnection({
-    host: 'localhost',      
-    user: 'root',           
-    password: '1234',       
-    database: 'rems_db'    
-});
+const CONFIG = {
+    PORT: 5000,
+    HOST: '0.0.0.0',
+    DB: {
+        host: 'localhost',
+        user: 'root',
+        password: '1234',
+        database: 'rems_db'
+    },
+    SIMULATION: {
+        INTERVAL_MS: 200,      // 데이터 전송 주기 (0.2초)
+        RPM_MULTIPLIER: 30,    
+        MAX_NOISE: 20          
+    }
+};
 
-// DB 접속 시도
+// ==========================================
+// [2] 데이터베이스 연결
+// ==========================================
+const dbConnection = mysql.createConnection(CONFIG.DB);
+
 dbConnection.connect((err) => {
     if (err) {
-        console.error('❌ DB 연결 실패:', err.message);
-        return; 
+        console.error('❌ [DB] 연결 실패:', err.message);
+        return;
     }
-    console.log('✅ MySQL DB에 성공적으로 연결되었습니다!');
+    console.log('✅ [DB] MySQL 데이터베이스 연결 성공!');
 });
 
 // ==========================================
-// [2] TCP 서버 설정 (포트: 5000)
+// [3] 헬퍼 함수 (Utility Functions)
 // ==========================================
-const PORT = 5000;
-const HOST = '0.0.0.0'; // 모든 IP에서 접속 허용
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// 랜덤 정수 생성 (min ~ max)
+const getRandomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+// RPM 계산 로직
+const calculateRpm = (targetPwm, isRunning) => {
+    if (!isRunning) return 0;
+    
+    const baseRpm = targetPwm * CONFIG.SIMULATION.RPM_MULTIPLIER;
+    const noise = getRandomInt(-CONFIG.SIMULATION.MAX_NOISE, CONFIG.SIMULATION.MAX_NOISE);
+    let rpm = baseRpm + noise;
+    
+    return rpm < 0 ? 0 : rpm; // 음수 방지
+};
+
+// ==========================================
+// [4] 서버 메인 로직
+// ==========================================
 const server = net.createServer((socket) => {
-    console.log(`✅ 새로운 클라이언트 접속: ${socket.remoteAddress}`);
+    console.log(`\n✅ [Client] 새로운 접속: ${socket.remoteAddress}`);
 
-    let targetPwm = 50; 
-    let isMotorRunning = false;
-    const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    // 클라이언트별 상태 변수
+    let state = {
+        targetPwm: 50,
+        isMotorRunning: false,
+        isAutoSequenceRunning: false
+    };
 
-
-    // 자동 시퀀스 비동기 함수 정의
+    // ----------------------------------------------------
+    // [기능 A] 자동 공정 시퀀스 (Auto Sequence)
+    // ----------------------------------------------------
     async function runAutoSequence() {
+        if (state.isAutoSequenceRunning) return; // 중복 실행 방지
+        state.isAutoSequenceRunning = true;
+
+        const sendLog = (msg) => {
+            if (socket.writable) socket.write(`LOG:${msg}\n`);
+        };
+
         try {
-            // Step 1
-            isMotorRunning = true;
-            targetPwm = 0;
-            socket.write(`LOG:[AUTO] STEP1: 안전 점검 시작\n`);
+            // STEP 1: 안전 점검
+            state.isMotorRunning = true;
+            state.targetPwm = 0;
+            sendLog(`[AUTO] STEP1: 안전 점검 시작 (3초)`);
+            
             for (let i = 3; i > 0; i--) {
-                socket.write(`LOG:[AUTO] 장비 점검 중... (${i}초/3초 경과)\n`);
+                sendLog(`[AUTO] 장비 점검 중... ${i}초 남음`);
                 await delay(1000);
             }
 
-            // Step 2
-            targetPwm = 30;
-            socket.write(`LOG:[AUTO] STEP2: 모터 가속 [PWM 30%]\n`);
+            // STEP 2: 가속
+            state.targetPwm = 30;
+            sendLog(`[AUTO] STEP2: 모터 가속 시작 PWM 30%`);
             for (let i = 1; i <= 5; i++) {
-                socket.write(`LOG:[AUTO] 가속 유지 중... (${i}/5초 경과)\n`);
+                sendLog(`[AUTO] 가속 유지 중... (${i}/5초)`);
                 await delay(1000);
             }
 
-            // Step 3
-            targetPwm = 85;
-            socket.write(`LOG:[AUTO] STEP3: 메인 공정 진입 [PWM 85%]\n`);
+            // STEP 3: 고속 공정
+            state.targetPwm = 85;
+            sendLog(`[AUTO] STEP3: 메인 공정 진입 PWM 85%`);
             for (let i = 1; i <= 10; i++) {
-                if (i % 5 === 0 || i === 1) {
-                    socket.write(`LOG:[AUTO] 고속 운전 중... (${i}/10초 경과)\n`);
+                if (i === 1 || i % 5 === 0) {
+                    sendLog(`[AUTO] 고속 운전 중... (${i}/10초)`);
                 }
                 await delay(1000);
             }
 
-            // Step 4 & 완료
-            targetPwm = 15;
-            socket.write(`LOG:[AUTO] STEP4: 공정 종료 및 감속 시작 [PWM 15%]\n`);
+            // STEP 4: 종료
+            state.targetPwm = 15;
+            sendLog(`[AUTO] STEP4: 공정 종료 및 감속 PWM 15%`);
             await delay(3000);
 
-            isMotorRunning = false;
-            targetPwm = 0;
-            socket.write("LOG:[AUTO] 모든 자동 공정 시퀀스가 정상 종료되었습니다.\n");
+            // 완료
+            state.isMotorRunning = false;
+            state.targetPwm = 0;
+            sendLog("[DONE] ✅ 모든 자동 공정 시퀀스 완료.");
 
         } catch (err) {
-            socket.write("LOG:[AUTO] ❌ 시퀀스 수행 중 오류 발생\n");
+            sendLog("[ERR] ❌ 시퀀스 실행 중 오류 발생");
+            console.error(err);
+        } finally {
+            state.isAutoSequenceRunning = false;
         }
     }
 
     // ----------------------------------------------------
-    // [기능 1] 1초마다 데이터 생성 -> WPF 전송 -> DB 저장
+    // [기능 B] 테스트용 데이터 전송 
     // ----------------------------------------------------
     const intervalId = setInterval(() => {
-        // 1. 테스트용 가짜 센서 데이터 생성 (랜덤)
-        const rssi = Math.floor(Math.random() * ( -40 - (-90) + 1)) + -90;
-    // 2. [변경] PWM 값에 비례하는 가짜 RPM 생성
-        // 모터가 꺼져있으면 0, 켜져있으면 PWM * 30 (최대 3000 RPM 가정) + 약간의 오차
-        let rpm = 0;
-        if (isMotorRunning) {
-            const baseRpm = targetPwm * 30; // 100%일 때 3000 RPM
-            const noise = Math.floor(Math.random() * 40) - 20; // ±20 오차 추가
-            rpm = baseRpm + noise;
-            if (rpm < 0) rpm = 0;
+        // 1. 센서 데이터 생성
+        const rssi = getRandomInt(-90, -40);
+        const rpm = calculateRpm(state.targetPwm, state.isMotorRunning);
+
+        // 2. WPF로 전송 (소켓이 연결된 상태일 때만)
+        if (socket.writable) {
+            const dataToSend = `RSSI:${rssi},RPM:${rpm},PWM:${state.targetPwm}\n`;
+            socket.write(dataToSend);
+        } else {
+            clearInterval(intervalId); // 연결 끊기면 타이머 중지
+            return;
         }
-        
-        // 2. WPF로 전송 (화면에 그리기용)
-        const dataToSend = `RSSI:${rssi},RPM:${rpm},PWM:${targetPwm}\n`;
-        socket.write(dataToSend);
-        
-        // 3. MySQL DB에 저장
-        const sql = `INSERT INTO sensor_logs (rssi, rpm) VALUES (?, ?)`;        
-        
-        dbConnection.query(sql, [rssi, rpm], (err, result) => {
-            if (err) {
-                console.log('⚠️ DB 저장 실패:', err.message);
-            } else {
-                console.log(`💾 DB Saved: RSSI=${rssi}dBm, RPM=${rpm}`);            }
+
+        // 3. DB 저장
+        const sql = `INSERT INTO sensor_logs (rssi, rpm) VALUES (?, ?)`;
+        dbConnection.query(sql, [rssi, rpm], (err) => {
+            if (err) console.error('⚠️ [DB] 저장 실패:', err.message);
         });
 
-
-        // 서버 화면에 점(.)을 찍어서 작동 중임을 표시
+        // 상태 표시 (콘솔 도배 방지용 한 줄 출력)
         process.stdout.write(`.`); 
 
-    }, 200); // 1초(1000ms) 간격
+    }, CONFIG.SIMULATION.INTERVAL_MS);
 
 
     // ----------------------------------------------------
-    // [기능 2] WPF에서 보낸 명령 받기 (LED 제어 등)
+    // [기능 C] 명령어 수신 및 처리
     // ----------------------------------------------------
     socket.on('data', (data) => {
-        const command = data.toString().trim(); // 공백 제거
-        console.log(`\n📩 명령 수신: [${command}]`); 
+        const command = data.toString().trim();
+        console.log(`\n📩 명령 수신: [${command}]`);
 
-        if (command === 'LED_ON') {
-            console.log("👉 [제어] LED를 켭니다 (ON)");
+        // PWM 명령 별도 처리 (파라미터가 있어서)
+        if (command.startsWith('PWM:')) {
+            const value = parseInt(command.split(':')[1]);
+            if (!isNaN(value)) {
+                state.targetPwm = value;
+                console.log(`👉 [설정] 목표 속도 변경: ${state.targetPwm}%`);
+            }
+            return;
+        }
 
-        } else if (command === 'LED_OFF') {
-            console.log("👉 [제어] LED를 끕니다 (OFF)");
-        }
-        if (command === 'AUTO_START') {
-            runAutoSequence(); 
-        }
-        // 추가: 모터 제어 명령 수신 로그
-        if (command === 'MOTOR_RUN') {
-            isMotorRunning = true;
-            console.log("👉 [상태] 모터 가동 (isMotorRunning = true)");
-        } 
-        else if (command === 'EMERGENCY_STOP') {
-            isMotorRunning = false;
-            console.log("👉 [상태] 모터 정지 (isMotorRunning = false)");
-        }
-        else if (command.startsWith('PWM:')) {
-            const receivedValue = command.split(':')[1];
-            targetPwm = parseInt(receivedValue);
-            console.log(`👉 [설정] 목표 속도: ${targetPwm}%`);
+        switch (command) {
+            case 'AUTO_START':
+                runAutoSequence();
+                break;
+            case 'MOTOR_RUN':
+                state.isMotorRunning = true;
+                console.log("👉 [상태] 모터 가동 ON");
+                break;
+            case 'EMERGENCY_STOP':
+                state.isMotorRunning = false;
+                console.log("👉 [상태] 모터 정지 OFF");
+                break;
+            case 'LED_ON':
+                console.log("👉 [제어] LED ON");
+                break;
+            case 'LED_OFF':
+                console.log("👉 [제어] LED OFF");
+                break;
+            default:
+                console.log(`⚠️ 알 수 없는 명령: ${command}`);
         }
     });
 
     // ----------------------------------------------------
-    // [기능 3] 접속 종료 처리
+    // [기능 D] 접속 종료 처리
     // ----------------------------------------------------
-    socket.on('end', () => {
-        console.log('\n❌ 클라이언트 접속 해제');
-        clearInterval(intervalId); // 데이터 전송 타이머 중지 (필수!)
-    });
+    const handleDisconnect = () => {
+        console.log(`\n❌ [Client] 접속 해제: ${socket.remoteAddress}`);
+        clearInterval(intervalId); // 타이머 정리
+    };
 
+    socket.on('end', handleDisconnect);
     socket.on('error', (err) => {
-        console.log(`\n⚠️ 통신 에러: ${err.message}`);
-        clearInterval(intervalId);
+        console.log(`\n⚠️ [Net] 통신 에러: ${err.message}`);
+        handleDisconnect();
     });
 });
 
-// 서버 가동 시작
-server.listen(PORT, HOST, () => {
-    console.log(`🚀 Node.js 서버가 포트 ${PORT}에서 대기 중입니다...`);
-    console.log(`---------------------------------------------------`);
+// ==========================================
+// [5] 서버 실행
+// ==========================================
+server.listen(CONFIG.PORT, CONFIG.HOST, () => {
+    console.log(`\n🚀 REMS Server Started on Port ${CONFIG.PORT}`);
+    console.log(`-------------------------------------------`);
 });
