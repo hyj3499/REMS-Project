@@ -58,6 +58,8 @@ const calculateRpm = (targetPwm, isRunning) => {
 // 타겟 지정 전송 함수 (일방향 통신)
 // targetType: 'FW' (Firmware) 또는 'WPF' (Client) 
 function sendToTarget(message, targetType) {
+    console.log(`[Server->${targetType}] 명령 전송: [${message}]`);
+
     connectedSockets.forEach((sock) => {
         // 소켓이 연결되어 있고 && 내가 찾는 타입일 때만 전송
         if (sock.writable && sock.clientType === targetType) {
@@ -71,7 +73,7 @@ function sendToTarget(message, targetType) {
 const server = net.createServer((socket) => {
     console.log(`\n✅ [Client] 새로운 접속: ${socket.remoteAddress}`);
 
-    // [기본 설정] 일단 접속하면 'WPF'라고 가정 (나중에 RSSI 보내면 FW로 바뀜)
+    // 기본 타입은 'WPF' (나중에 WPF나 FW로 구체화됨)
     socket.clientType = 'WPF'; 
     connectedSockets.push(socket);
 
@@ -186,20 +188,20 @@ const server = net.createServer((socket) => {
             const value = parseInt(msg.split(':')[1]);
             if (!isNaN(value)) {
                 GLOBAL_LATEST_RSSI = value; 
-                console.log(`[FW] RSSI 수신: ${value}`); 
+                console.log(`[FW->Server] RSSI 수신: ${value}`); 
             }
             return; 
         }
 
             // 기존 명령어 처리
-            console.log(`\n📩 명령 수신: [${msg}]`);
+            console.log(`\n[${socket.clientType}->Server] 명령 수신: [${msg}]`);
 
         // 2. WPF에서 온 제어 명령 처리
         if (msg.startsWith('PWM:')) {
             const value = parseInt(msg.split(':')[1]);
             if (!isNaN(value)) {
                 state.targetPwm = value;
-                console.log(`👉 [설정] 목표 속도 변경: ${state.targetPwm}%`);
+                //console.log(`👉 [설정] 목표 속도 변경: ${state.targetPwm}%`);
             }
             return;
         }
@@ -211,12 +213,12 @@ const server = net.createServer((socket) => {
             
             // LED 제어 명령은 'FW'에게만 전달 (Unicast)
             case 'LED_ON': 
-                console.log("👉 [제어] FW에게 LED ON 명령 전송"); 
+                //console.log("👉 [제어] FW에게 LED ON 명령 전송"); 
                 sendToTarget("LED_ON", 'FW'); 
                 break;
             
             case 'LED_OFF': 
-                console.log("👉 [제어] FW에게 LED OFF 명령 전송"); 
+                //console.log("👉 [제어] FW에게 LED OFF 명령 전송"); 
                 sendToTarget("LED_OFF", 'FW'); 
                 break;
                 
