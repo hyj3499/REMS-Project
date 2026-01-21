@@ -14,6 +14,7 @@ const uint16_t port  = 5000;            // Node.js 서버 포트
 // [2] OLED 및 전역 변수 설정
 // ==========================================
 U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, 12, 14, U8X8_PIN_NONE);
+int currentPwm = 0;
 WiFiClient client;
 unsigned long lastSendTime = 0; // 데이터 전송 주기 체크용
 
@@ -65,58 +66,46 @@ void setup() {
 }
 
 void loop() {
-  // 2. 서버 연결 상태 확인 및 재연결
   if (!client.connected()) {
-    Serial.print("Connecting to Server: ");
-    Serial.println(host);
-
-    // 서버 연결 시도
-    if (client.connect(host, port)) {
-      Serial.println("✅ Server Connected!");
-    } else {
-      Serial.println("❌ Connection Failed. Retrying...");
-      delay(2000);
-      return; // 연결 실패하면 loop 처음으로 돌아감
-    }
+    if (client.connect(host, port)) Serial.println("✅ Server Connected!");
+    else { delay(1000); return; }
   }
 
-  // 3. 데이터 수신 (서버 -> ESP8266)
+  // [수신] 서버 -> 아두이노
   if (client.available()) {
     String msg = client.readStringUntil('\n');
+    msg.trim(); 
     
-    msg.trim(); // 앞뒤 공백, 줄바꿈 문자(\r, \n) 완전 제거
-    Serial.println("Recv: [" + msg + "]"); // 대괄호[]로 감싸서 공백이 있는지 확인
+    if (msg.length() > 0) {
+      Serial.println("Recv: [" + msg + "]"); 
 
-    // [추가] LED 제어 로직
-    if (msg == "LED_ON") {
-      digitalWrite(LED_BUILTIN, LOW); 
-      Serial.println("💡 LED turned ON");
-    } 
-    else if (msg == "LED_OFF") {
-      digitalWrite(LED_BUILTIN, HIGH); 
-      Serial.println("🌑 LED turned OFF");
+      if (msg == "LED_ON") digitalWrite(LED_BUILTIN, LOW); 
+      else if (msg == "LED_OFF") digitalWrite(LED_BUILTIN, HIGH);
+      
+      // PWM 명령 받기
+      else if (msg.startsWith("PWM:")) {
+         currentPwm = msg.substring(4).toInt(); 
+         Serial.print("👉 PWM 설정됨: ");
+         Serial.println(currentPwm);
+      }
     }
-
-    // OLED에 받은 메시지 표시
-    u8g2.clearBuffer();
-    u8g2.drawStr(0, 10, "Server Msg:");
-    u8g2.setCursor(0, 25);
-    u8g2.print(msg);
-    u8g2.sendBuffer();
   }
 
-  // 4. 데이터 송신 (ESP8266 -> Server)
+  // [송신] 아두이노 -> 서버 (0.2초마다)
   unsigned long currentTime = millis();
-  if (currentTime - lastSendTime > 200) { //0.2초마다 송신
+  if (currentTime - lastSendTime > 200) { 
     lastSendTime = currentTime;
 
-    // 현재 RSSI(신호 강도) 측정
     long rssi = WiFi.RSSI(); 
     
-    // 서버로 전송할 메시지 포맷: "RSSI:-65"
-    String dataToSend = "RSSI:" + String(rssi);
+    // RPM 계산 (PWM에 비례 + 노이즈)
+    int baseRpm = currentPwm * 30;
+    int noise = (currentPwm > 0) ? random(-50, 51) : 0;
+    int currentRpm = baseRpm + noise;
+    if (currentRpm < 0) currentRpm = 0;
+
+    // RSSI와 RPM만 보냄 (PWM은 서버가 이미 알고 있음)
+    String dataToSend = "RSSI:" + String(rssi) + ",RPM:" + String(currentRpm);
     client.println(dataToSend);
-    
-    Serial.println("Send: " + dataToSend);
   }
 }
