@@ -55,12 +55,13 @@ const calculateRpm = (targetPwm, isRunning) => {
     return rpm < 0 ? 0 : rpm; // 음수 방지
 };
 
-// Firmware 에게 메시지 전송하는 함수
-function broadcast(message, senderSocket) {
+// 타겟 지정 전송 함수 (일방향 통신)
+// targetType: 'FW' (Firmware) 또는 'WPF' (Client) 
+function sendToTarget(message, targetType) {
     connectedSockets.forEach((sock) => {
-        // 메시지를 보낸 본인(WPF)을 제외하고, Firmware 에게만 전송
-        if (sock !== senderSocket && sock.writable) {
-            sock.write(message + "\n"); // 줄바꿈 문자 중요!
+        // 소켓이 연결되어 있고 && 내가 찾는 타입일 때만 전송
+        if (sock.writable && sock.clientType === targetType) {
+            sock.write(message + "\n");
         }
     });
 }
@@ -70,7 +71,10 @@ function broadcast(message, senderSocket) {
 const server = net.createServer((socket) => {
     console.log(`\n✅ [Client] 새로운 접속: ${socket.remoteAddress}`);
 
-    connectedSockets.push(socket); //접속자 명단에 추가
+    // [기본 설정] 일단 접속하면 'WPF'라고 가정 (나중에 RSSI 보내면 FW로 바뀜)
+    socket.clientType = 'WPF'; 
+    connectedSockets.push(socket);
+
     // 클라이언트별 상태 변수
     let state = {
         targetPwm: 50,
@@ -86,8 +90,8 @@ const server = net.createServer((socket) => {
         state.isAutoSequenceRunning = true;
 
         const sendLog = (msg) => {
-            // 로그도 이제 broadcast로 모두에게 보냄
-            broadcast(`LOG:${msg}`, null); 
+            // 로그는 모니터(WPF)에게만 전송
+            sendToTarget(`LOG:${msg}`, 'WPF');
         };
 
         try {
@@ -143,28 +147,26 @@ const server = net.createServer((socket) => {
     const intervalId = setInterval(() => {
             // ESP8266이 보내준 전역 변수값
             const rssi = GLOBAL_LATEST_RSSI; 
-            
             // RPM은 시뮬레이션 값 유지
             const rpm = calculateRpm(state.targetPwm, state.isMotorRunning);
 
-            // 연결된 모든 클라이언트(ESP, WPF)에게 현재 상태 전송
             if (socket.writable) {
-                // ESP8266도 이 메시지를 받아서 모터를 제어할 수 있음
+            // 모니터(WPF)인 경우에만 데이터를 보냄 (FW(펌웨어)는 이 데이터를 받을 필요가 없으므로 전송 X)
+            if (socket.clientType === 'WPF') {
                 const dataToSend = `RSSI:${rssi},RPM:${rpm},PWM:${state.targetPwm}\n`;
                 socket.write(dataToSend);
+                }
             } else {
                 clearInterval(intervalId);
                 return;
             }
 
-            // DB 저장 (너무 자주 저장되면 부하가 걸리므로, 실제로는 1초에 한번 등으로 조절하기도 함)
+            // DB 저장
             const sql = `INSERT INTO sensor_logs (rssi, rpm) VALUES (?, ?)`;
             dbConnection.query(sql, [rssi, rpm], (err) => {
                 if (err) console.error('⚠️ [DB] 저장 실패:', err.message);
             });
 
-            // 상태 표시 (도배 방지용 점 찍기)
-            process.stdout.write(`.`); 
 
         }, CONFIG.SIMULATION.INTERVAL_MS);
 
@@ -176,41 +178,48 @@ const server = net.createServer((socket) => {
 
             if (msg === "") return; //메시지가 비어있으면 그냥 무시하고 함수 종료
             
-            if (msg.startsWith('RSSI:')) {
-                const value = parseInt(msg.split(':')[1]);
-                if (!isNaN(value)) {
-                    GLOBAL_LATEST_RSSI = value; 
-                    console.log(`[ESP] RSSI 수신: ${value}`); // 너무 자주 찍히면 주석 처리
-                }
-                return;
+        // 1. RSSI 처리 (이걸 보내는 애는 무조건 FW)
+        if (msg.startsWith('RSSI:')) {
+            // 여기서 소켓의 정체를 'FW'로 확정
+            socket.clientType = 'FW'; 
+
+            const value = parseInt(msg.split(':')[1]);
+            if (!isNaN(value)) {
+                GLOBAL_LATEST_RSSI = value; 
+                console.log(`[FW] RSSI 수신: ${value}`); 
             }
+            return; 
+        }
 
             // 기존 명령어 처리
             console.log(`\n📩 명령 수신: [${msg}]`);
 
-            if (msg.startsWith('PWM:')) {
-                const value = parseInt(msg.split(':')[1]);
-                if (!isNaN(value)) {
-                    state.targetPwm = value;
-                    console.log(`👉 [설정] 목표 속도 변경: ${state.targetPwm}%`);
-                }
-                return;
+        // 2. WPF에서 온 제어 명령 처리
+        if (msg.startsWith('PWM:')) {
+            const value = parseInt(msg.split(':')[1]);
+            if (!isNaN(value)) {
+                state.targetPwm = value;
+                console.log(`👉 [설정] 목표 속도 변경: ${state.targetPwm}%`);
             }
+            return;
+        }
 
             switch (msg) {
                 case 'AUTO_START': runAutoSequence(); break;
                 case 'MOTOR_RUN': state.isMotorRunning = true; break;
                 case 'EMERGENCY_STOP': state.isMotorRunning = false; break;
-            // [수정] LED 제어: 로그만 찍지 말고 ESP8266에게 전달(Broadcast)
+            
+            // LED 제어 명령은 'FW'에게만 전달 (Unicast)
             case 'LED_ON': 
-                console.log("👉 [제어] LED ON 전파"); 
-                broadcast("LED_ON", socket);
+                console.log("👉 [제어] FW에게 LED ON 명령 전송"); 
+                sendToTarget("LED_ON", 'FW'); 
+                break;
+            
+            case 'LED_OFF': 
+                console.log("👉 [제어] FW에게 LED OFF 명령 전송"); 
+                sendToTarget("LED_OFF", 'FW'); 
                 break;
                 
-            case 'LED_OFF': 
-                console.log("👉 [제어] LED OFF 전파"); 
-                broadcast("LED_OFF", socket); 
-                break;
                 default: console.log(`⚠️ 알 수 없는 명령: ${msg}`);
             }
         });
