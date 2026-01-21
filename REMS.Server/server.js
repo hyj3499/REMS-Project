@@ -124,73 +124,74 @@ const server = net.createServer((socket) => {
     }
 
     // ----------------------------------------------------
-    // [기능 B] 테스트용 데이터 전송 
+    // [기능 B] 데이터 브로드캐스트 (전송 루프)
     // ----------------------------------------------------
     const intervalId = setInterval(() => {
-        // 1. 센서 데이터 생성
-        const rssi = getRandomInt(-90, -40);
-        const rpm = calculateRpm(state.targetPwm, state.isMotorRunning);
+            // ESP8266이 보내준 전역 변수값
+            const rssi = GLOBAL_LATEST_RSSI; 
+            
+            // RPM은 시뮬레이션 값 유지
+            const rpm = calculateRpm(state.targetPwm, state.isMotorRunning);
 
-        // 2. WPF로 전송 (소켓이 연결된 상태일 때만)
-        if (socket.writable) {
-            const dataToSend = `RSSI:${rssi},RPM:${rpm},PWM:${state.targetPwm}\n`;
-            socket.write(dataToSend);
-        } else {
-            clearInterval(intervalId); // 연결 끊기면 타이머 중지
-            return;
-        }
+            // 연결된 모든 클라이언트(ESP, WPF)에게 현재 상태 전송
+            if (socket.writable) {
+                // ESP8266도 이 메시지를 받아서 모터를 제어할 수 있음
+                const dataToSend = `RSSI:${rssi},RPM:${rpm},PWM:${state.targetPwm}\n`;
+                socket.write(dataToSend);
+            } else {
+                clearInterval(intervalId);
+                return;
+            }
 
-        // 3. DB 저장
-        const sql = `INSERT INTO sensor_logs (rssi, rpm) VALUES (?, ?)`;
-        dbConnection.query(sql, [rssi, rpm], (err) => {
-            if (err) console.error('⚠️ [DB] 저장 실패:', err.message);
-        });
+            // DB 저장 (너무 자주 저장되면 부하가 걸리므로, 실제로는 1초에 한번 등으로 조절하기도 함)
+            const sql = `INSERT INTO sensor_logs (rssi, rpm) VALUES (?, ?)`;
+            dbConnection.query(sql, [rssi, rpm], (err) => {
+                if (err) console.error('⚠️ [DB] 저장 실패:', err.message);
+            });
 
-        // 상태 표시 (콘솔 도배 방지용 한 줄 출력)
-        process.stdout.write(`.`); 
+            // 상태 표시 (도배 방지용 점 찍기)
+            process.stdout.write(`.`); 
 
-    }, CONFIG.SIMULATION.INTERVAL_MS);
-
+        }, CONFIG.SIMULATION.INTERVAL_MS);
 
     // ----------------------------------------------------
-    // [기능 C] 명령어 수신 및 처리
+    // [기능 C] 데이터 수신 (ESP8266 -> Server)
     // ----------------------------------------------------
     socket.on('data', (data) => {
-        const command = data.toString().trim();
-        console.log(`\n📩 명령 수신: [${command}]`);
+            const msg = data.toString().trim();
 
-        // PWM 명령 별도 처리 (파라미터가 있어서)
-        if (command.startsWith('PWM:')) {
-            const value = parseInt(command.split(':')[1]);
-            if (!isNaN(value)) {
-                state.targetPwm = value;
-                console.log(`👉 [설정] 목표 속도 변경: ${state.targetPwm}%`);
+            if (msg === "") return; //메시지가 비어있으면 그냥 무시하고 함수 종료
+            
+            if (msg.startsWith('RSSI:')) {
+                const value = parseInt(msg.split(':')[1]);
+                if (!isNaN(value)) {
+                    GLOBAL_LATEST_RSSI = value; 
+                    console.log(`[ESP] RSSI 수신: ${value}`); // 너무 자주 찍히면 주석 처리
+                }
+                return; // RSSI 데이터는 명령어가 아니므로 여기서 종료
             }
-            return;
-        }
 
-        switch (command) {
-            case 'AUTO_START':
-                runAutoSequence();
-                break;
-            case 'MOTOR_RUN':
-                state.isMotorRunning = true;
-                console.log("👉 [상태] 모터 가동 ON");
-                break;
-            case 'EMERGENCY_STOP':
-                state.isMotorRunning = false;
-                console.log("👉 [상태] 모터 정지 OFF");
-                break;
-            case 'LED_ON':
-                console.log("👉 [제어] LED ON");
-                break;
-            case 'LED_OFF':
-                console.log("👉 [제어] LED OFF");
-                break;
-            default:
-                console.log(`⚠️ 알 수 없는 명령: ${command}`);
-        }
-    });
+            // 기존 명령어 처리
+            console.log(`\n📩 명령 수신: [${msg}]`);
+
+            if (msg.startsWith('PWM:')) {
+                const value = parseInt(msg.split(':')[1]);
+                if (!isNaN(value)) {
+                    state.targetPwm = value;
+                    console.log(`👉 [설정] 목표 속도 변경: ${state.targetPwm}%`);
+                }
+                return;
+            }
+
+            switch (msg) {
+                case 'AUTO_START': runAutoSequence(); break;
+                case 'MOTOR_RUN': state.isMotorRunning = true; break;
+                case 'EMERGENCY_STOP': state.isMotorRunning = false; break;
+                case 'LED_ON': console.log("👉 [제어] LED ON"); break;
+                case 'LED_OFF': console.log("👉 [제어] LED OFF"); break;
+                default: console.log(`⚠️ 알 수 없는 명령: ${msg}`);
+            }
+        });
 
     // ----------------------------------------------------
     // [기능 D] 접속 종료 처리

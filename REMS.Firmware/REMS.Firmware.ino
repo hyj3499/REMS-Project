@@ -2,71 +2,105 @@
 #include <U8g2lib.h>
 
 // ==========================================
-// [사용자 설정] 와이파이 정보 입력
+// [1] 와이파이 & 서버 설정
 // ==========================================
-const char* ssid     = "test";      // 예: "SK_WiFiGIGA"
-const char* password = "34993499";  // 예: "12345678"
+const char* ssid     = "test";          // 핫스팟 이름
+const char* password = "34993499";      // 핫스팟 비밀번호
+
+const char* host     = "10.75.221.122"; 
+const uint16_t port  = 5000;            // Node.js 서버 포트
 
 // ==========================================
-// [OLED 설정] 핀 번호 (Clock=12, Data=14)
+// [2] OLED 및 전역 변수 설정
 // ==========================================
-// SW I2C 방식: (Rotation, Clock, Data, Reset)
 U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, 12, 14, U8X8_PIN_NONE);
+WiFiClient client;
+unsigned long lastSendTime = 0; // 데이터 전송 주기 체크용
 
 void setup() {
-  Serial.begin(115200); // 시(속도 115200)
-  
-  // 1. OLED 초기화
+  Serial.begin(115200);
+
+  // OLED 초기화
   u8g2.begin();
-  u8g2.enableUTF8Print(); // 한글 출력 대비
-  
-  // 2. 와이파이 연결 시작
-  WiFi.begin(ssid, password);
+  u8g2.enableUTF8Print();
+  u8g2.setFont(u8g2_font_6x12_tr);
+
+  // 1. 와이파이 연결 시도
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
+  delay(100);
 
   Serial.println();
-  Serial.print("와이파이 연결 시도 중: ");
+  Serial.print("Connecting to: ");
   Serial.println(ssid);
+  WiFi.begin(ssid, password);
 
-  // 3. 연결 대기 (연결될 때까지 무한 루프)
-  int dotCount = 0;
+  // 연결 대기 루프
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
-    Serial.print("."); 
-
-    // OLED에 "Connecting..." 표시
+    Serial.print(".");
+    
+    // OLED 표시
     u8g2.clearBuffer();
-    u8g2.setFont(u8g2_font_7x14B_tr); // 제목 폰트
-    u8g2.drawStr(0, 15, "WiFi Connecting");
-    
-    // 점이 늘어나는 애니메이션
-    String dots = "";
-    for(int i=0; i<=dotCount%10; i++) dots += ".";
-    u8g2.drawStr(0, 35, dots.c_str());
-    
+    u8g2.drawStr(0, 10, "WiFi Connecting...");
+    u8g2.drawStr(0, 30, ssid);
     u8g2.sendBuffer();
-    dotCount++;
   }
 
-  // 4. 연결 성공 시 실행
-  Serial.println("");
-  Serial.println("✅ 와이파이 연결 성공!");
-  Serial.print("할당받은 IP 주소: ");
+  Serial.println("\n✅ WiFi Connected!");
+  Serial.print("IP: ");
   Serial.println(WiFi.localIP());
 
-  // OLED에 성공 메시지와 IP 주소 출력
+  // 연결 성공 화면
   u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_7x14B_tr);
-  u8g2.drawStr(0, 15, "WiFi Connected!");
-  
-  u8g2.setFont(u8g2_font_6x12_tr); 
-  u8g2.setCursor(0, 35);
-  u8g2.print("IP: ");
-  u8g2.print(WiFi.localIP()); // IP 주소 출력
-  
+  u8g2.drawStr(0, 10, "WiFi OK!");
+  u8g2.setCursor(0, 30);
+  u8g2.print(WiFi.localIP());
   u8g2.sendBuffer();
+  delay(1000);
 }
 
 void loop() {
-  // 연결이 완료되었으므로 여기서는 아무것도 안 하고 대기
-  // 나중에 여기에 '서버 접속 코드'를 넣을 예정
+  // 2. 서버 연결 상태 확인 및 재연결
+  if (!client.connected()) {
+    Serial.print("Connecting to Server: ");
+    Serial.println(host);
+
+    // 서버 연결 시도
+    if (client.connect(host, port)) {
+      Serial.println("✅ Server Connected!");
+    } else {
+      Serial.println("❌ Connection Failed. Retrying...");
+      delay(2000);
+      return; // 연결 실패하면 loop 처음으로 돌아감
+    }
+  }
+
+  // 3. 데이터 수신 (서버 -> ESP8266)
+  if (client.available()) {
+    String msg = client.readStringUntil('\n');
+    Serial.println("Recv: " + msg);
+    
+    // OLED에 받은 메시지 표시
+    u8g2.clearBuffer();
+    u8g2.drawStr(0, 10, "Server Msg:");
+    u8g2.setCursor(0, 25);
+    u8g2.print(msg);
+    u8g2.sendBuffer();
+  }
+
+  // 4. 데이터 송신 (ESP8266 -> Server)
+  unsigned long currentTime = millis();
+  if (currentTime - lastSendTime > 200) { //0.2초마다 송신
+    lastSendTime = currentTime;
+
+    // 현재 RSSI(신호 강도) 측정
+    long rssi = WiFi.RSSI(); 
+    
+    // 서버로 전송할 메시지 포맷: "RSSI:-65"
+    String dataToSend = "RSSI:" + String(rssi);
+    client.println(dataToSend);
+    
+    Serial.println("Send: " + dataToSend);
+  }
 }
