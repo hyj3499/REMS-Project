@@ -20,6 +20,10 @@ unsigned long lastSendTime = 0; // 데이터 전송 주기 체크용
 void setup() {
   Serial.begin(115200);
 
+  //내장 LED 핀 설정
+  pinMode(LED_BUILTIN, OUTPUT);     
+  digitalWrite(LED_BUILTIN, HIGH);  // 초기 상태: 꺼짐 (Active Low라 HIGH가 OFF)
+
   // OLED 초기화
   u8g2.begin();
   u8g2.enableUTF8Print();
@@ -79,8 +83,20 @@ void loop() {
   // 3. 데이터 수신 (서버 -> ESP8266)
   if (client.available()) {
     String msg = client.readStringUntil('\n');
-    Serial.println("Recv: " + msg);
     
+    msg.trim(); // 앞뒤 공백, 줄바꿈 문자(\r, \n) 완전 제거
+    Serial.println("Recv: [" + msg + "]"); // 대괄호[]로 감싸서 공백이 있는지 확인
+
+    // [추가] LED 제어 로직
+    if (msg == "LED_ON") {
+      digitalWrite(LED_BUILTIN, LOW); 
+      Serial.println("💡 LED turned ON");
+    } 
+    else if (msg == "LED_OFF") {
+      digitalWrite(LED_BUILTIN, HIGH); 
+      Serial.println("🌑 LED turned OFF");
+    }
+
     // OLED에 받은 메시지 표시
     u8g2.clearBuffer();
     u8g2.drawStr(0, 10, "Server Msg:");

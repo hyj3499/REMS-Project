@@ -20,6 +20,9 @@ const CONFIG = {
     }
 };
 
+const connectedSockets = [];
+let GLOBAL_LATEST_RSSI = -100;
+
 // ==========================================
 // [2] 데이터베이스 연결
 // ==========================================
@@ -52,12 +55,22 @@ const calculateRpm = (targetPwm, isRunning) => {
     return rpm < 0 ? 0 : rpm; // 음수 방지
 };
 
+// Firmware 에게 메시지 전송하는 함수
+function broadcast(message, senderSocket) {
+    connectedSockets.forEach((sock) => {
+        // 메시지를 보낸 본인(WPF)을 제외하고, Firmware 에게만 전송
+        if (sock !== senderSocket && sock.writable) {
+            sock.write(message + "\n"); // 줄바꿈 문자 중요!
+        }
+    });
+}
 // ==========================================
 // [4] 서버 메인 로직
 // ==========================================
 const server = net.createServer((socket) => {
     console.log(`\n✅ [Client] 새로운 접속: ${socket.remoteAddress}`);
 
+    connectedSockets.push(socket); //접속자 명단에 추가
     // 클라이언트별 상태 변수
     let state = {
         targetPwm: 50,
@@ -73,7 +86,8 @@ const server = net.createServer((socket) => {
         state.isAutoSequenceRunning = true;
 
         const sendLog = (msg) => {
-            if (socket.writable) socket.write(`LOG:${msg}\n`);
+            // 로그도 이제 broadcast로 모두에게 보냄
+            broadcast(`LOG:${msg}`, null); 
         };
 
         try {
@@ -155,7 +169,7 @@ const server = net.createServer((socket) => {
         }, CONFIG.SIMULATION.INTERVAL_MS);
 
     // ----------------------------------------------------
-    // [기능 C] 데이터 수신 (ESP8266 -> Server)
+    // [기능 C] 데이터 수신 (Firmware -> Server)
     // ----------------------------------------------------
     socket.on('data', (data) => {
             const msg = data.toString().trim();
@@ -168,7 +182,7 @@ const server = net.createServer((socket) => {
                     GLOBAL_LATEST_RSSI = value; 
                     console.log(`[ESP] RSSI 수신: ${value}`); // 너무 자주 찍히면 주석 처리
                 }
-                return; // RSSI 데이터는 명령어가 아니므로 여기서 종료
+                return;
             }
 
             // 기존 명령어 처리
@@ -187,8 +201,16 @@ const server = net.createServer((socket) => {
                 case 'AUTO_START': runAutoSequence(); break;
                 case 'MOTOR_RUN': state.isMotorRunning = true; break;
                 case 'EMERGENCY_STOP': state.isMotorRunning = false; break;
-                case 'LED_ON': console.log("👉 [제어] LED ON"); break;
-                case 'LED_OFF': console.log("👉 [제어] LED OFF"); break;
+            // [수정] LED 제어: 로그만 찍지 말고 ESP8266에게 전달(Broadcast)
+            case 'LED_ON': 
+                console.log("👉 [제어] LED ON 전파"); 
+                broadcast("LED_ON", socket);
+                break;
+                
+            case 'LED_OFF': 
+                console.log("👉 [제어] LED OFF 전파"); 
+                broadcast("LED_OFF", socket); 
+                break;
                 default: console.log(`⚠️ 알 수 없는 명령: ${msg}`);
             }
         });
@@ -196,9 +218,15 @@ const server = net.createServer((socket) => {
     // ----------------------------------------------------
     // [기능 D] 접속 종료 처리
     // ----------------------------------------------------
-    const handleDisconnect = () => {
+const handleDisconnect = () => {
         console.log(`\n❌ [Client] 접속 해제: ${socket.remoteAddress}`);
-        clearInterval(intervalId); // 타이머 정리
+        clearInterval(intervalId);
+        
+        // [추가] 접속자 명단에서 삭제
+        const index = connectedSockets.indexOf(socket);
+        if (index > -1) {
+            connectedSockets.splice(index, 1);
+        }
     };
 
     socket.on('end', handleDisconnect);
