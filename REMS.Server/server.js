@@ -24,6 +24,9 @@ let GLOBAL_STATE = {
     isAutoSequenceRunning: false
 };
 
+// 인터럽트 컨트롤러 저장용 변수
+let autoSequenceController = null;
+
 // ==========================================
 // [2] 데이터베이스 연결
 // ==========================================
@@ -54,6 +57,27 @@ function sendToTarget(message, targetType) {
         }
     });
 }
+
+// 이벤트 기반 딜레이 함수
+const wait = (ms, signal) => {
+    return new Promise((resolve, reject) => {
+        if (signal?.aborted) {
+            return reject(new Error("⚠️ 긴급 정지 (즉시 중단)"));
+        }
+
+        const timer = setTimeout(() => {
+            resolve();
+        }, ms);
+
+        if (signal) {
+            signal.addEventListener('abort', () => {
+                clearTimeout(timer); // 타이머 취소
+                reject(new Error("⚠️ 긴급 정지 (인터럽트 발생)"));
+            }, { once: true }); // 한 번만 실행
+        }
+    });
+};
+
 // ==========================================
 // [4] 서버 메인 로직
 // ==========================================
@@ -71,6 +95,10 @@ async function runAutoSequence() {
         if (GLOBAL_STATE.isAutoSequenceRunning) return; 
         GLOBAL_STATE.isAutoSequenceRunning = true;
 
+        // 인터럽트
+        autoSequenceController = new AbortController();
+        const { signal } = autoSequenceController; 
+
         const sendLog = (msg) => sendToTarget(`LOG:${msg}`, 'WPF');
         
         const sendPwmToFw = (pwmValue) => {
@@ -78,48 +106,51 @@ async function runAutoSequence() {
             sendToTarget(`PWM:${pwmValue}`, 'FW'); // 2. 아두이노 전송
         };
 
-        try {
+try {
             GLOBAL_STATE.isMotorRunning = true;
 
-            // STEP 1: 안전 점검
-            sendPwmToFw(0); // ★ 함수 호출로 변경
+            sendPwmToFw(0);
             sendLog(`[AUTO] STEP1: 안전 점검 시작 (3초)`);
+            
+            // 딜레이 함수에 신호선(signal) 연결
+            await wait(3000, signal); 
+
             for (let i = 3; i > 0; i--) {
                 sendLog(`[AUTO] 장비 점검 중... ${i}초 남음`);
-                await delay(1000);
+                await wait(1000, signal);
             }
 
-            // STEP 2: 가속
-            sendPwmToFw(30); // ★ 함수 호출로 변경 (이게 빠져 있었음!)
+            sendPwmToFw(30);
             sendLog(`[AUTO] STEP2: 모터 가속 시작 PWM 30%`);
             for (let i = 1; i <= 5; i++) {
                 sendLog(`[AUTO] 가속 유지 중... (${i}/5초)`);
-                await delay(1000);
+                await wait(1000, signal);
             }
 
-            // STEP 3: 고속 공정
-            sendPwmToFw(85); // ★ 함수 호출로 변경
+            sendPwmToFw(85);
             sendLog(`[AUTO] STEP3: 메인 공정 진입 PWM 85%`);
             for (let i = 1; i <= 10; i++) {
                 if (i === 1 || i % 5 === 0) sendLog(`[AUTO] 고속 운전 중... (${i}/10초)`);
-                await delay(1000);
+                await wait(1000, signal);
             }
 
-            // STEP 4: 종료
-            sendPwmToFw(15); // ★ 함수 호출로 변경
+            sendPwmToFw(15);
             sendLog(`[AUTO] STEP4: 공정 종료 및 감속 PWM 15%`);
-            await delay(3000);
+            await wait(3000, signal);
 
-            // 완료
-            sendPwmToFw(0); // ★ 함수 호출로 변경
+            sendPwmToFw(0);
             GLOBAL_STATE.isMotorRunning = false;
             sendLog("[DONE] ✅ 모든 자동 공정 시퀀스 완료.");
 
         } catch (err) {
-            sendLog("[ERR] ❌ 오류 발생");
-            console.error(err);
+            //인터럽트가 발생하면 여기로 즉시 점프
+            console.log(`🛑 시퀀스 강제 중단: ${err.message}`);
+            sendLog(`[STOP] 🛑 비상 정지 발동! 공정을 즉시 중단.`);
+            sendPwmToFw(0); 
+
         } finally {
             GLOBAL_STATE.isAutoSequenceRunning = false;
+            autoSequenceController = null; // 컨트롤러 폐기
         }
     }
     // ----------------------------------------------------
@@ -155,7 +186,7 @@ async function runAutoSequence() {
             
                 // 서버 <-> 펌웨어 PWM 동기화 로직
             if (GLOBAL_STATE.targetPwm === 0 && rpm > 100) {
-                 console.log("⚠️ [Sync] 아두이노가 혼자 돌고 있음 -> 정지 명령 재전송");
+                 console.log("⚠️ [Sync] 재동기화");
                  sendToTarget("PWM:0", "FW");
             }
                 // 1-2. DB 저장
@@ -197,9 +228,24 @@ async function runAutoSequence() {
                 sendToTarget("LED_OFF", 'FW'); 
                 break;
             
-            // 기타 모터 제어 명령도 FW로 넘겨줌
-            case 'MOTOR_RUN': sendToTarget("MOTOR_RUN", 'FW'); break;
-            case 'EMERGENCY_STOP': sendToTarget("EMERGENCY_STOP", 'FW'); break;
+            case 'MOTOR_RUN': 
+                            GLOBAL_STATE.isMotorRunning = true; 
+                            sendToTarget("MOTOR_RUN", 'FW'); 
+                            break;
+            case 'EMERGENCY_STOP': 
+                            console.log("[ALERT] 비상 정지 요청 수신!");
+                            
+                            // 현재 돌고 있는 시퀀스가 있다면 -> 폭파(abort)
+                            if (autoSeㅇquenceController) {
+                                autoSequenceController.abort(); // -> 즉시 catch 블록으로 이동!
+                            }
+                            
+                            GLOBAL_STATE.isMotorRunning = false;
+                            GLOBAL_STATE.targetPwm = 0; 
+                            sendToTarget("EMERGENCY_STOP", 'FW'); 
+                            sendToTarget("PWM:0", 'FW'); 
+                            sendToTarget("LED_OFF", 'FW'); 
+                            break;
 
             default: console.log(`⚠️ [System] 알 수 없는 명령: ${msg}`);
         }
