@@ -7,7 +7,7 @@
 const char* ssid     = "test";          // 핫스팟 이름
 const char* password = "34993499";      // 핫스팟 비밀번호
 
-const char* host     = "10.75.221.122"; 
+const char* host     = "192.168.199.122";
 const uint16_t port  = 5000;            // Node.js 서버 포트
 
 // ==========================================
