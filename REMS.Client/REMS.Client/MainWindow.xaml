@@ -160,16 +160,16 @@
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
-                                    <Ellipse Width="60" Height="60" Stroke="Gray" StrokeThickness="2">
+                                    <Ellipse Width="30" Height="30" Stroke="Gray" StrokeThickness="2">
                                         <Ellipse.Style>
                                             <Style TargetType="Ellipse">
                                                 <Setter Property="Fill" Value="#333333"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsLedOn}" Value="True">
-                                                        <Setter Property="Fill" Value="#FF4500"/>
+                                                        <Setter Property="Fill" Value="#FFF000"/>
                                                         <Setter Property="Effect">
                                                             <Setter.Value>
-                                                                <DropShadowEffect Color="#FF4500" BlurRadius="20" ShadowDepth="0" Opacity="1"/>
+                                                                <DropShadowEffect Color="#FFF000" BlurRadius="20" ShadowDepth="0" Opacity="1"/>
                                                             </Setter.Value>
                                                         </Setter>
                                                     </DataTrigger>
