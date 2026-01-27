@@ -233,7 +233,7 @@ app.get('/api/logs', (req, res) => {
 
     // DB 테이블 이름이 'sensor_logs'라고 가정 (위의 Insert 구문 참고)
     // C# LogDataModel과 이름 매칭을 위해 AS 사용
-    const sql = `
+const sql = `
         SELECT 
             id AS Id, 
             DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS Timestamp, 
@@ -242,10 +242,9 @@ app.get('/api/logs', (req, res) => {
             rpm AS Rpm, 
             IF(rpm > 0, 'Running', 'Stopped') AS Status
         FROM sensor_logs 
-        WHERE DATE(created_at) >= ? AND DATE(created_at) <= ?
+        WHERE created_at >= ? AND created_at <= ?
         ORDER BY id DESC
     `;
-
     dbConnection.query(sql, [startDate, endDate], (err, results) => {
         if (err) {
             console.error('❌ [API] DB 에러:', err);

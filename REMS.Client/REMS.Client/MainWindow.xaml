@@ -294,13 +294,21 @@
 
                     <Border Grid.Row="0" Background="#1E1E1E" CornerRadius="10" Padding="15" Margin="0,0,0,15">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="📅 Date Range :" Foreground="#AAAAAA" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,15,0"/>
+                            <TextBlock Text="📅 Date Range :" Foreground="#AAAAAA" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,10,0"/>
 
-                            <DatePicker SelectedDate="{Binding SearchStartDate}" Width="120" VerticalContentAlignment="Center"/>
+                            <DatePicker SelectedDate="{Binding SearchStartDate}" Width="130" VerticalContentAlignment="Center"/>
+                            <ComboBox ItemsSource="{Binding Hours}" SelectedItem="{Binding StartHour}" Width="50" Margin="5,0,0,0" VerticalContentAlignment="Center"/>
+                            <TextBlock Text=":" Foreground="Gray" VerticalAlignment="Center" Margin="2,0"/>
+                            <ComboBox ItemsSource="{Binding Minutes}" SelectedItem="{Binding StartMinute}" Width="50" VerticalContentAlignment="Center"/>
+
                             <TextBlock Text="~" Foreground="Gray" VerticalAlignment="Center" Margin="10,0"/>
-                            <DatePicker SelectedDate="{Binding SearchEndDate}" Width="120" VerticalContentAlignment="Center"/>
 
-                            <Button Command="{Binding SearchDbCommand}" Content="🔍 SEARCH" Width="100" Height="30" Margin="20,0,0,0" Background="#007ACC" Foreground="White" FontWeight="Bold" BorderThickness="0">
+                            <DatePicker SelectedDate="{Binding SearchEndDate}" Width="130" VerticalContentAlignment="Center"/>
+                            <ComboBox ItemsSource="{Binding Hours}" SelectedItem="{Binding EndHour}" Width="50" Margin="5,0,0,0" VerticalContentAlignment="Center"/>
+                            <TextBlock Text=":" Foreground="Gray" VerticalAlignment="Center" Margin="2,0"/>
+                            <ComboBox ItemsSource="{Binding Minutes}" SelectedItem="{Binding EndMinute}" Width="50" VerticalContentAlignment="Center"/>
+
+                            <Button Command="{Binding SearchDbCommand}" Content="SEARCH" Width="90" Height="30" Margin="15,0,0,0" Background="#28a745" Foreground="White" FontWeight="Bold" BorderThickness="0">
                                 <Button.Resources>
                                     <Style TargetType="Border">
                                         <Setter Property="CornerRadius" Value="5"/>
@@ -359,7 +367,7 @@
 
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="60"/>
-                                    <DataGridTextColumn Header="Time" Binding="{Binding Timestamp}" Width="160"/>
+                                    <DataGridTextColumn Header="Time" Binding="{Binding Timestamp}" Width="200"/>
                                     <DataGridTextColumn Header="IP" Binding="{Binding IpAddress}" Width="120"/>
                                     <DataGridTextColumn Header="RSSI" Binding="{Binding Rssi}" Width="80"/>
                                     <DataGridTextColumn Header="RPM" Binding="{Binding Rpm}" Width="80"/>

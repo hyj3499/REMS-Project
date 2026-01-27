@@ -55,6 +55,7 @@ namespace REMS.Client
         [ObservableProperty] private int _motorSpeed = 0;
         private bool _isServerUpdate = false;
 
+
         // ==========================================
         // [New] DB 검색용 데이터
         // ==========================================
@@ -62,6 +63,14 @@ namespace REMS.Client
         [ObservableProperty] private DateTime _searchEndDate = DateTime.Now;               // 오늘
 
         [ObservableProperty] private int _searchResultCount = 0; // 검색 결과 개수
+
+        [ObservableProperty] private int _startHour = 0;
+        [ObservableProperty] private int _startMinute = 0;
+        [ObservableProperty] private int _endHour = 23;
+        [ObservableProperty] private int _endMinute = 59;
+
+        public List<int> Hours { get; } = Enumerable.Range(0, 24).ToList();
+        public List<int> Minutes { get; } = Enumerable.Range(0, 60).ToList();
 
         // DataGrid에 바인딩 될 컬렉션
         public ObservableCollection<LogDataModel> SearchResults { get; } = new ObservableCollection<LogDataModel>();
@@ -142,12 +151,12 @@ namespace REMS.Client
         {
             try
             {
-                AddLog($"[DB] 검색 시작: {SearchStartDate:yyyy-MM-dd} ~ {SearchEndDate:yyyy-MM-dd}");
-
                 // 1. URL 생성 (Node.js 서버 주소)
-                string start = SearchStartDate.ToString("yyyy-MM-dd");
-                string end = SearchEndDate.ToString("yyyy-MM-dd");
-                string url = $"http://{IpAddress}:{ApiPort}/api/logs?start={start}&end={end}";
+                string start = $"{SearchStartDate:yyyy-MM-dd} {StartHour:D2}:{StartMinute:D2}:00";
+                string end = $"{SearchEndDate:yyyy-MM-dd} {EndHour:D2}:{EndMinute:D2}:59";
+                string url = $"http://{IpAddress}:{ApiPort}/api/logs?start={Uri.EscapeDataString(start)}&end={Uri.EscapeDataString(end)}";
+
+                AddLog($"[DB] 검색 시작:{start} ~ {end}");
 
                 // 2. GET 요청 전송
                 var response = await _httpClient.GetAsync(url);
@@ -160,18 +169,16 @@ namespace REMS.Client
                 var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 var data = JsonSerializer.Deserialize<List<LogDataModel>>(jsonString, options);
 
-                // 5. UI 업데이트 (기존 결과 지우고 새로 추가)
+                // 5. UI 업데이트 
                 SearchResults.Clear();
                 if (data != null)
                 {
-                    foreach (var item in data)
-                    {
-                        SearchResults.Add(item);
-                    }
+                    foreach (var item in data) SearchResults.Add(item);
                     SearchResultCount = data.Count;
-                    AddLog($"[DB] 검색 완료. {data.Count}건 조회됨.");
+                    AddLog($"[DB] {data.Count}건 조회 완료.");
                 }
             }
+
             catch (HttpRequestException httpEx)
             {
                 AddLog($"[DB] ❌ 통신 오류: API 서버({ApiPort})에 연결할 수 없습니다.");
