@@ -1,11 +1,14 @@
 const net = require('net');      // 소켓 통신 모듈
 const mysql = require('mysql2'); // MySQL DB 모듈
+const express = require('express'); // 웹 서버 모듈
+const cors = require('cors');       // CORS 모듈
 
 // ==========================================
 // [1] 환경 설정 (Configuration)
 // ==========================================
 const CONFIG = {
-    PORT: 5000,
+    TCP_PORT: 5000,   // 기존 소켓 포트
+    HTTP_PORT: 3000,  // API 서버 포트
     HOST: '0.0.0.0',
     DB: {
         host: 'localhost',
@@ -13,13 +16,12 @@ const CONFIG = {
         password: '1234',
         database: 'rems_db'
     },
-
 };
 
 const connectedSockets = [];
 
 let GLOBAL_STATE = {
-    targetPwm: 0, // PWM 초기값
+    targetPwm: 0, 
     isMotorRunning: false,
     isAutoSequenceRunning: false
 };
@@ -45,74 +47,58 @@ dbConnection.connect((err) => {
 // ==========================================
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// 타겟 지정 전송 함수 (일방향 통신)
-// targetType: 'FW' (Firmware) 또는 'WPF' (Client) 
 function sendToTarget(message, targetType) {
     console.log(`[Server->${targetType}] 명령 전송: [${message}]`);
-
     connectedSockets.forEach((sock) => {
-        // 소켓이 연결되어 있고 && 내가 찾는 타입일 때만 전송
         if (sock.writable && sock.clientType === targetType) {
             sock.write(message + "\n");
         }
     });
 }
 
-// 이벤트 기반 딜레이 함수
 const wait = (ms, signal) => {
     return new Promise((resolve, reject) => {
         if (signal?.aborted) {
             return reject(new Error("⚠️ 긴급 정지 (즉시 중단)"));
         }
-
         const timer = setTimeout(() => {
             resolve();
         }, ms);
-
         if (signal) {
             signal.addEventListener('abort', () => {
-                clearTimeout(timer); // 타이머 취소
+                clearTimeout(timer);
                 reject(new Error("⚠️ 긴급 정지 (인터럽트 발생)"));
-            }, { once: true }); // 한 번만 실행
+            }, { once: true });
         }
     });
 };
 
 // ==========================================
-// [4] 서버 메인 로직
+// [4] TCP 서버 메인 로직 (Port 5000)
 // ==========================================
-const server = net.createServer((socket) => {
-    console.log(`\n✅ [Client] 새로운 접속: ${socket.remoteAddress}`);
-    // 기본 타입은 'WPF' (나중에 WPF나 FW로 구체화됨)
+const tcpServer = net.createServer((socket) => {
+    console.log(`\n✅ [TCP Client] 새로운 접속: ${socket.remoteAddress}`);
     socket.clientType = 'WPF'; 
     connectedSockets.push(socket);
 
-    // ----------------------------------------------------
-    // [기능 A] 자동 공정 시퀀스 (Auto Sequence)
-    // ----------------------------------------------------
-
-async function runAutoSequence() {
+    // [기능 A] 자동 공정 시퀀스
+    async function runAutoSequence() {
         if (GLOBAL_STATE.isAutoSequenceRunning) return; 
         GLOBAL_STATE.isAutoSequenceRunning = true;
 
-        // 인터럽트
         autoSequenceController = new AbortController();
         const { signal } = autoSequenceController; 
 
         const sendLog = (msg) => sendToTarget(`LOG:${msg}`, 'WPF');
-        
         const sendPwmToFw = (pwmValue) => {
-            GLOBAL_STATE.targetPwm = pwmValue; // 1. 서버 기억
-            sendToTarget(`PWM:${pwmValue}`, 'FW'); // 2. 아두이노 전송
+            GLOBAL_STATE.targetPwm = pwmValue;
+            sendToTarget(`PWM:${pwmValue}`, 'FW');
         };
 
-try {
+        try {
             GLOBAL_STATE.isMotorRunning = true;
-
             sendPwmToFw(0);
             sendLog(`[AUTO] STEP1: 안전 점검 시작 (3초)`);
-            
-            // 딜레이 함수에 신호선(signal) 연결
             await wait(3000, signal); 
 
             for (let i = 3; i > 0; i--) {
@@ -143,119 +129,85 @@ try {
             sendLog("[DONE] ✅ 모든 자동 공정 시퀀스 완료.");
 
         } catch (err) {
-            //인터럽트가 발생하면 여기로 즉시 점프
             console.log(`🛑 시퀀스 강제 중단: ${err.message}`);
             sendLog(`[STOP] 🛑 비상 정지 발동! 공정을 즉시 중단.`);
             sendPwmToFw(0); 
-
         } finally {
             GLOBAL_STATE.isAutoSequenceRunning = false;
-            autoSequenceController = null; // 컨트롤러 폐기
+            autoSequenceController = null;
         }
     }
-    // ----------------------------------------------------
-    // [기능 B] 기존 setInterval(시뮬레이션 루프)은 삭제
-    // ----------------------------------------------------
 
-    // ----------------------------------------------------
-    // [기능 C] 데이터 수신 (Firmware -> Server) 및 라우팅
-    // ----------------------------------------------------
+    // [기능 C] 데이터 수신
     socket.on('data', (data) => {
-            const msg = data.toString().trim();
-            if (msg === "") return; //메시지가 비어있으면 그냥 무시하고 함수 종료
-            
-        // ============================================
-        // 1. 펌웨어(FW)가 보낸 데이터 처리
-        // 포맷: "RSSI:-60,RPM:1200,PWM:50"
-        // ============================================
-            if (msg.startsWith('RSSI:')) {
-                socket.clientType = 'FW'; 
+        const msg = data.toString().trim();
+        if (msg === "") return;
 
-                // 1-1. 파싱 (RSSI, RPM 추출)
-                let rssi = 0, rpm = 0;
-                try {
-                    const parts = msg.split(',');
-                    parts.forEach(part => {
-                        const [key, val] = part.split(':');
-                        if (key === 'RSSI') rssi = parseInt(val);
-                        if (key === 'RPM') rpm = parseInt(val);
-                    });
-                    GLOBAL_LATEST_RSSI = rssi;
-                    
-                } catch (e) { console.error('파싱 에러:', e); }
-            
-                // 서버 <-> 펌웨어 PWM 동기화 로직
+        // 1. 펌웨어(FW)가 보낸 데이터 처리
+        if (msg.startsWith('RSSI:')) {
+            socket.clientType = 'FW'; 
+            let rssi = 0, rpm = 0;
+            try {
+                const parts = msg.split(',');
+                parts.forEach(part => {
+                    const [key, val] = part.split(':');
+                    if (key === 'RSSI') rssi = parseInt(val);
+                    if (key === 'RPM') rpm = parseInt(val);
+                });
+            } catch (e) { console.error('파싱 에러:', e); }
+
             if (GLOBAL_STATE.targetPwm === 0 && rpm > 100) {
-                 console.log("⚠️ [Sync] 재동기화");
                  sendToTarget("PWM:0", "FW");
             }
-                // 1-2. DB 저장
-                const sql = `INSERT INTO sensor_logs (rssi, rpm) VALUES (?, ?)`;
-                dbConnection.query(sql, [rssi, rpm], () => {});
 
-                // WPF에게 보낼 때는 서버가 알고 있는 PWM 값을 합쳐서 보냄
-                // FW가 보낸 RSSI, RPM + 서버가 기억하는 targetPwm
-                const combinedData = `RSSI:${rssi},RPM:${rpm},PWM:${GLOBAL_STATE.targetPwm}`;                
-                sendToTarget(combinedData, 'WPF'); 
-                
-                return; 
-            }
+            // DB 저장 (sensor_logs 테이블)
+            // 주의: DB 테이블 컬럼명이 rssi, rpm 이어야 함
+            const sql = `INSERT INTO sensor_logs (rssi, rpm, created_at) VALUES (?, ?, NOW())`;
+            dbConnection.query(sql, [rssi, rpm], (err) => {
+                if (err) console.error("DB Insert Error:", err.message);
+            });
 
-        // ============================================
-        // 2. WPF(모니터)가 보낸 명령 처리
-        // ============================================
+            const combinedData = `RSSI:${rssi},RPM:${rpm},PWM:${GLOBAL_STATE.targetPwm}`;                
+            sendToTarget(combinedData, 'WPF'); 
+            return; 
+        }
+
+        // 2. WPF가 보낸 명령 처리
         console.log(`\n[${socket.clientType}->Server] 명령 수신: [${msg}]`);
 
-        // PWM 명령이 오면 -> FW에게 전달
         if (msg.startsWith('PWM:')) {
-                    const value = parseInt(msg.split(':')[1]);
-                    if (!isNaN(value)) {
-                        // 전역 변수 업데이트 (이제 모두가 이 값을 공유함)
-                        GLOBAL_STATE.targetPwm = value; 
-                        sendToTarget(msg, 'FW'); 
-                    }
-                    return;
-                }
+            const value = parseInt(msg.split(':')[1]);
+            if (!isNaN(value)) {
+                GLOBAL_STATE.targetPwm = value; 
+                sendToTarget(msg, 'FW'); 
+            }
+            return;
+        }
 
         switch (msg) {
             case 'AUTO_START': runAutoSequence(); break;
-            
-            case 'LED_ON': 
-                sendToTarget("LED_ON", 'FW'); 
+            case 'LED_ON': sendToTarget("LED_ON", 'FW'); break;
+            case 'LED_OFF': sendToTarget("LED_OFF", 'FW'); break;
+            case 'MOTOR_RUN': 
+                GLOBAL_STATE.isMotorRunning = true; 
+                sendToTarget("MOTOR_RUN", 'FW'); 
                 break;
-            
-            case 'LED_OFF': 
+            case 'EMERGENCY_STOP': 
+                console.log("[ALERT] 비상 정지 요청 수신!");
+                if (autoSequenceController) autoSequenceController.abort();
+                GLOBAL_STATE.isMotorRunning = false;
+                GLOBAL_STATE.targetPwm = 0; 
+                sendToTarget("EMERGENCY_STOP", 'FW'); 
+                sendToTarget("PWM:0", 'FW'); 
                 sendToTarget("LED_OFF", 'FW'); 
                 break;
-            
-            case 'MOTOR_RUN': 
-                            GLOBAL_STATE.isMotorRunning = true; 
-                            sendToTarget("MOTOR_RUN", 'FW'); 
-                            break;
-            case 'EMERGENCY_STOP': 
-                            console.log("[ALERT] 비상 정지 요청 수신!");
-                            
-                            // 현재 돌고 있는 시퀀스가 있다면 -> 폭파(abort)
-                            if (autoSeㅇquenceController) {
-                                autoSequenceController.abort(); // -> 즉시 catch 블록으로 이동!
-                            }
-                            
-                            GLOBAL_STATE.isMotorRunning = false;
-                            GLOBAL_STATE.targetPwm = 0; 
-                            sendToTarget("EMERGENCY_STOP", 'FW'); 
-                            sendToTarget("PWM:0", 'FW'); 
-                            sendToTarget("LED_OFF", 'FW'); 
-                            break;
-
             default: console.log(`⚠️ [System] 알 수 없는 명령: ${msg}`);
         }
     });
 
-    // ----------------------------------------------------
-    // [기능 D] 접속 종료 처리
-    // ----------------------------------------------------
-const handleDisconnect = () => {
-        console.log(`\n❌ [Client] 접속 해제: ${socket.clientType}`);
+    // 접속 종료 처리
+    const handleDisconnect = () => {
+        console.log(`❌ [TCP Client] 접속 해제: ${socket.clientType}`);
         const index = connectedSockets.indexOf(socket);
         if (index > -1) connectedSockets.splice(index, 1);
     };
@@ -265,9 +217,55 @@ const handleDisconnect = () => {
 });
 
 // ==========================================
-// [5] 서버 실행
+// [5] HTTP API 서버 추가 (Port 3000)
 // ==========================================
-server.listen(CONFIG.PORT, CONFIG.HOST, () => {
-    console.log(`\n🚀 REMS Server Started on Port ${CONFIG.PORT}`);
-    console.log(`-------------------------------------------`);
+const app = express();
+app.use(cors()); // CORS 허용
+app.use(express.json());
+
+// DB 검색 API
+// 요청: GET http://localhost:3000/api/logs?start=2026-01-26&end=2026-01-27
+app.get('/api/logs', (req, res) => {
+    const startDate = req.query.start;
+    const endDate = req.query.end;
+
+    console.log(`🔎 [API] 검색 요청: ${startDate} ~ ${endDate}`);
+
+    // DB 테이블 이름이 'sensor_logs'라고 가정 (위의 Insert 구문 참고)
+    // C# LogDataModel과 이름 매칭을 위해 AS 사용
+    const sql = `
+        SELECT 
+            id AS Id, 
+            DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS Timestamp, 
+            '192.168.0.10' AS IpAddress, 
+            rssi AS Rssi, 
+            rpm AS Rpm, 
+            IF(rpm > 0, 'Running', 'Stopped') AS Status
+        FROM sensor_logs 
+        WHERE DATE(created_at) >= ? AND DATE(created_at) <= ?
+        ORDER BY id DESC
+    `;
+
+    dbConnection.query(sql, [startDate, endDate], (err, results) => {
+        if (err) {
+            console.error('❌ [API] DB 에러:', err);
+            res.status(500).send('DB Error');
+        } else {
+            console.log(`✅ [API] ${results.length}건 데이터 반환 완료`);
+            res.json(results);
+        }
+    });
+});
+
+// ==========================================
+// [6] 서버 실행 (두 포트 모두 실행)
+// ==========================================
+// 1. TCP 서버 실행 (5000)
+tcpServer.listen(CONFIG.TCP_PORT, CONFIG.HOST, () => {
+    console.log(`🚀 TCP Server running on port ${CONFIG.TCP_PORT}`);
+});
+
+// 2. HTTP 서버 실행 (3000)
+app.listen(CONFIG.HTTP_PORT, () => {
+    console.log(`🌍 HTTP API Server running on port ${CONFIG.HTTP_PORT}`);
 });
